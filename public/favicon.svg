@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <linearGradient id="petalPink" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFA6CD" />
+      <stop offset="100%" stop-color="#FF5FA2" />
+    </linearGradient>
+    <linearGradient id="petalCoral" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFB3A1" />
+      <stop offset="100%" stop-color="#FF7F66" />
+    </linearGradient>
+    <linearGradient id="petalLilac" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D8C8FF" />
+      <stop offset="100%" stop-color="#B79CFF" />
+    </linearGradient>
+    <linearGradient id="petalTeal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#87EFE5" />
+      <stop offset="100%" stop-color="#20C5B5" />
+    </linearGradient>
+    <linearGradient id="centerGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF275" />
+      <stop offset="60%" stop-color="#FFC93C" />
+      <stop offset="100%" stop-color="#FFA800" />
+    </linearGradient>
+  </defs>
+
+  <g>
+    <!-- 1. Top Petal: Open Book Spread (Pink) -->
+    <g transform="translate(50, 50) rotate(0) translate(-50, -50)">
+      <path d="M50 48 C46 32, 32 20, 36 8 C40 4, 48 10, 50 14" fill="url(#petalPink)" stroke="#4B2A7B" stroke-width="3" stroke-linejoin="round" />
+      <path d="M50 48 C54 32, 68 20, 64 8 C60 4, 52 10, 50 14" fill="url(#petalPink)" stroke="#4B2A7B" stroke-width="3" stroke-linejoin="round" />
+      <path d="M40 18 Q44 26 48 36" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
+      <path d="M60 18 Q56 26 52 36" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
+    </g>
+
+    <!-- 2. Top-Right Petal: Open Book Spread (Coral) -->
+    <g transform="translate(50, 50) rotate(72) translate(-50, -50)">
+      <path d="M50 48 C46 32, 32 20, 36 8 C40 4, 48 10, 50 14" fill="url(#petalCoral)" stroke="#4B2A7B" stroke-width="3" stroke-linejoin="round" />
+      <path d="M50 48 C54 32, 68 20, 64 8 C60 4, 52 10, 50 14" fill="url(#petalCoral)" stroke="#4B2A7B" stroke-width="3" stroke-linejoin="round" />
+      <path d="M40 18 Q44 26 48 36" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
+      <path d="M60 18 Q56 26 52 36" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
+    </g>
+
+    <!-- 3. Bottom-Right Petal: Open Book Spread (Lilac) -->
+    <g transform="translate(50, 50) rotate(144) translate(-50, -50)">
+      <path d="M50 48 C46 32, 32 20, 36 8 C40 4, 48 10, 50 14" fill="url(#petalLilac)" stroke="#4B2A7B" stroke-width="3" stroke-linejoin="round" />
+      <path d="M50 48 C54 32, 68 20, 64 8 C60 4, 52 10, 50 14" fill="url(#petalLilac)" stroke="#4B2A7B" stroke-width="3" stroke-linejoin="round" />
+      <path d="M40 18 Q44 26 48 36" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
+      <path d="M60 18 Q56 26 52 36" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
+    </g>
+
+    <!-- 4. Bottom-Left Petal: Open Book Spread (Teal) -->
+    <g transform="translate(50, 50) rotate(216) translate(-50, -50)">
+      <path d="M50 48 C46 32, 32 20, 36 8 C40 4, 48 10, 50 14" fill="url(#petalTeal)" stroke="#4B2A7B" stroke-width="3" stroke-linejoin="round" />
+      <path d="M50 48 C54 32, 68 20, 64 8 C60 4, 52 10, 50 14" fill="url(#petalTeal)" stroke="#4B2A7B" stroke-width="3" stroke-linejoin="round" />
+      <path d="M40 18 Q44 26 48 36" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
+      <path d="M60 18 Q56 26 52 36" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
+    </g>
+
+    <!-- 5. Top-Left Petal: Open Book Spread (Pink/Lilac) -->
+    <g transform="translate(50, 50) rotate(288) translate(-50, -50)">
+      <path d="M50 48 C46 32, 32 20, 36 8 C40 4, 48 10, 50 14" fill="url(#petalPink)" stroke="#4B2A7B" stroke-width="3" stroke-linejoin="round" />
+      <path d="M50 48 C54 32, 68 20, 64 8 C60 4, 52 10, 50 14" fill="url(#petalPink)" stroke="#4B2A7B" stroke-width="3" stroke-linejoin="round" />
+      <path d="M40 18 Q44 26 48 36" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
+      <path d="M60 18 Q56 26 52 36" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
+    </g>
+
+    <!-- Center Golden Seed -->
+    <circle cx="50" cy="50" r="15" fill="url(#centerGold)" stroke="#4B2A7B" stroke-width="3" />
+    <!-- Center Highlight & Sparkle -->
+    <ellipse cx="46" cy="46" rx="4" ry="2.5" fill="#FFFFFF" opacity="0.7" transform="rotate(-30 46 46)" />
+    <path d="M53 49 Q51 53 49 53" stroke="#4B2A7B" stroke-width="1.8" stroke-linecap="round" fill="none" />
+  </g>
+</svg>

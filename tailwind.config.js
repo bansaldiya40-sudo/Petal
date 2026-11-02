@@ -1,0 +1,135 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        // Storybook Palette strictly light and watercolor
+        story: {
+          cream: '#FFF8EE',
+          blush: '#FFD6E0',
+          blushBorder: '#F2A8BC',
+          lavender: '#D9C8FF',
+          lavenderBorder: '#B196F5',
+          mint: '#CFF2E0',
+          mintBorder: '#83D9A7',
+          butter: '#FFF0B8',
+          butterBorder: '#E6CB67',
+          sky: '#CBE6FF',
+          skyBorder: '#88C0F5',
+          peach: '#FFD9C0',
+          peachBorder: '#F5A97D',
+          parchment: '#FFF5E4',
+          parchmentBorder: '#E8D4B0',
+          wood: '#B88652',
+          woodDark: '#855627',
+          woodLight: '#DFC29D',
+        },
+        plum: {
+          dark: '#4A3566',
+          medium: '#6C538C',
+          light: '#9B83BA',
+          faint: '#D4C6E8',
+          subtle: '#EFEBF6',
+        },
+        pm: {
+          soft: '#F4EFFF',
+          light: '#E7DCFF',
+          pastel: '#D9C8FF',
+          border: '#B196F5',
+          accent: '#9670F5',
+          deep: '#6C3FE0',
+          glow: 'rgba(217, 200, 255, 0.45)',
+        },
+        mr: {
+          soft: '#EEFAF3',
+          light: '#DBF5E7',
+          pastel: '#CFF2E0',
+          border: '#83D9A7',
+          accent: '#47C27D',
+          deep: '#1F8C4F',
+          glow: 'rgba(207, 242, 224, 0.45)',
+        },
+        micro: {
+          soft: '#FFFDF0',
+          light: '#FFF8CE',
+          pastel: '#FFF0B8',
+          border: '#E6CB67',
+          accent: '#E6B82E',
+          deep: '#A67C0D',
+          glow: 'rgba(255, 240, 184, 0.45)',
+        },
+        petal: {
+          pink: '#FF5FA2',
+          coral: '#FF7F66',
+          lilac: '#B79CFF',
+          gold: '#FFC93C',
+          plum: '#4B2A7B',
+          teal: '#20C5B5',
+          sky: '#8FB4FF',
+          apricot: '#FFC9A3',
+          blush: '#FF9EC4',
+          grass: '#7BE0A8',
+          grassDeep: '#3FC48A',
+        },
+      },
+      fontFamily: {
+        brand: ['"Lilita One"', '"Baloo 2"', 'cursive', 'sans-serif'],
+        display: ['"Baloo 2"', '"Fredoka"', 'system-ui', 'sans-serif'],
+        body: ['Nunito', 'system-ui', 'sans-serif'],
+      },
+      borderRadius: {
+        'organic-sm': '18px 24px 20px 22px',
+        'organic-md': '28px 36px 30px 34px',
+        'organic-lg': '42px 52px 46px 48px',
+        'organic-wobbly': '255px 15px 225px 15px/15px 225px 15px 255px',
+      },
+      boxShadow: {
+        'storybook': '0 10px 25px -4px rgba(74, 53, 102, 0.08), 0 4px 10px -2px rgba(74, 53, 102, 0.04)',
+        'storybook-hover': '0 18px 35px -6px rgba(74, 53, 102, 0.14), 0 8px 16px -4px rgba(74, 53, 102, 0.06)',
+        'glow-lavender': '0 0 35px rgba(217, 200, 255, 0.65)',
+        'glow-mint': '0 0 35px rgba(207, 242, 224, 0.65)',
+        'glow-butter': '0 0 35px rgba(255, 240, 184, 0.65)',
+      },
+      keyframes: {
+        bob: {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(-8px)' },
+        },
+        'bob-slow': {
+          '0%, 100%': { transform: 'translateY(0px) rotate(0deg)' },
+          '50%': { transform: 'translateY(-10px) rotate(1deg)' },
+        },
+        sway: {
+          '0%, 100%': { transform: 'rotate(0deg)' },
+          '50%': { transform: 'rotate(3deg)' },
+        },
+        flutter: {
+          '0%, 100%': { transform: 'translateY(0px) rotate(-2deg)' },
+          '50%': { transform: 'translateY(-6px) rotate(3deg)' },
+        },
+        cloudDrift: {
+          '0%': { transform: 'translateX(-5%)' },
+          '50%': { transform: 'translateX(5%)' },
+          '100%': { transform: 'translateX(-5%)' },
+        },
+        fireflyTwinkle: {
+          '0%, 100%': { opacity: '0.2', transform: 'scale(0.8)' },
+          '50%': { opacity: '0.95', transform: 'scale(1.2)' },
+        },
+      },
+      animation: {
+        bob: 'bob 4.5s ease-in-out infinite',
+        'bob-slow': 'bob-slow 6.5s ease-in-out infinite',
+        sway: 'sway 4s ease-in-out infinite',
+        flutter: 'flutter 3.5s ease-in-out infinite',
+        'cloud-drift': 'cloudDrift 28s ease-in-out infinite',
+        'firefly': 'fireflyTwinkle 3s ease-in-out infinite',
+      }
+    },
+  },
+  plugins: [],
+}
