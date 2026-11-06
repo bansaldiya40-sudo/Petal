@@ -82,22 +82,22 @@ CREATE TABLE IF NOT EXISTS public.topic_variants (
 );
 
 -- 8. STORAGE BUCKET: materials (for raw PPT, PDF, DOCX uploads)
--- Note: Supabase Storage bucket creation
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('materials', 'materials', true)
 ON CONFLICT (id) DO UPDATE SET public = true;
 
--- Storage Policy: Allow public read
+-- Storage Policies (Idempotent)
+DROP POLICY IF EXISTS "Public Read Materials Bucket" ON storage.objects;
 CREATE POLICY "Public Read Materials Bucket"
 ON storage.objects FOR SELECT
 USING (bucket_id = 'materials');
 
--- Storage Policy: Allow upload
+DROP POLICY IF EXISTS "Allow Upload to Materials Bucket" ON storage.objects;
 CREATE POLICY "Allow Upload to Materials Bucket"
 ON storage.objects FOR INSERT
 WITH CHECK (bucket_id = 'materials');
 
--- Storage Policy: Allow delete
+DROP POLICY IF EXISTS "Allow Delete from Materials Bucket" ON storage.objects;
 CREATE POLICY "Allow Delete from Materials Bucket"
 ON storage.objects FOR DELETE
 USING (bucket_id = 'materials');
@@ -112,46 +112,44 @@ ALTER TABLE public.quizzes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.visuals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.topic_variants ENABLE ROW LEVEL SECURITY;
 
--- Permissive policy allowing users to read & write their own data,
--- or fallback to public/demo rows when user_id is NULL or anonymous.
-DO $$
-DECLARE
-    t text;
-BEGIN
-    FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('subjects', 'materials', 'learn_content', 'quizzes', 'visuals', 'topic_variants')
-    LOOP
-        EXECUTE format('
-            DROP POLICY IF EXISTS "Users can read own or shared %I" ON public.%I;
-            CREATE POLICY "Users can read own or shared %I" ON public.%I
-            FOR SELECT USING (
-                auth.uid() IS NULL 
-                OR user_id IS NULL 
-                OR user_id = auth.uid()
-            );
+-- 1. Subjects Policy
+DROP POLICY IF EXISTS "Access subjects" ON public.subjects;
+CREATE POLICY "Access subjects" ON public.subjects
+    FOR ALL
+    USING (auth.uid() IS NULL OR user_id IS NULL OR user_id = auth.uid())
+    WITH CHECK (auth.uid() IS NULL OR user_id IS NULL OR user_id = auth.uid());
 
-            DROP POLICY IF EXISTS "Users can insert own %I" ON public.%I;
-            CREATE POLICY "Users can insert own %I" ON public.%I
-            FOR INSERT WITH CHECK (
-                auth.uid() IS NULL 
-                OR user_id IS NULL 
-                OR user_id = auth.uid()
-            );
+-- 2. Materials Policy
+DROP POLICY IF EXISTS "Access materials" ON public.materials;
+CREATE POLICY "Access materials" ON public.materials
+    FOR ALL
+    USING (auth.uid() IS NULL OR user_id IS NULL OR user_id = auth.uid())
+    WITH CHECK (auth.uid() IS NULL OR user_id IS NULL OR user_id = auth.uid());
 
-            DROP POLICY IF EXISTS "Users can update own %I" ON public.%I;
-            CREATE POLICY "Users can update own %I" ON public.%I
-            FOR UPDATE USING (
-                auth.uid() IS NULL 
-                OR user_id IS NULL 
-                OR user_id = auth.uid()
-            );
+-- 3. Learn Content Policy
+DROP POLICY IF EXISTS "Access learn_content" ON public.learn_content;
+CREATE POLICY "Access learn_content" ON public.learn_content
+    FOR ALL
+    USING (auth.uid() IS NULL OR user_id IS NULL OR user_id = auth.uid())
+    WITH CHECK (auth.uid() IS NULL OR user_id IS NULL OR user_id = auth.uid());
 
-            DROP POLICY IF EXISTS "Users can delete own %I" ON public.%I;
-            CREATE POLICY "Users can delete own %I" ON public.%I
-            FOR DELETE USING (
-                auth.uid() IS NULL 
-                OR user_id IS NULL 
-                OR user_id = auth.uid()
-            );
-        ', t, t, t, t, t, t, t, t);
-    END LOOP;
-END $$;
+-- 4. Quizzes Policy
+DROP POLICY IF EXISTS "Access quizzes" ON public.quizzes;
+CREATE POLICY "Access quizzes" ON public.quizzes
+    FOR ALL
+    USING (auth.uid() IS NULL OR user_id IS NULL OR user_id = auth.uid())
+    WITH CHECK (auth.uid() IS NULL OR user_id IS NULL OR user_id = auth.uid());
+
+-- 5. Visuals Policy
+DROP POLICY IF EXISTS "Access visuals" ON public.visuals;
+CREATE POLICY "Access visuals" ON public.visuals
+    FOR ALL
+    USING (auth.uid() IS NULL OR user_id IS NULL OR user_id = auth.uid())
+    WITH CHECK (auth.uid() IS NULL OR user_id IS NULL OR user_id = auth.uid());
+
+-- 6. Topic Variants Policy
+DROP POLICY IF EXISTS "Access topic_variants" ON public.topic_variants;
+CREATE POLICY "Access topic_variants" ON public.topic_variants
+    FOR ALL
+    USING (auth.uid() IS NULL OR user_id IS NULL OR user_id = auth.uid())
+    WITH CHECK (auth.uid() IS NULL OR user_id IS NULL OR user_id = auth.uid());
