@@ -153,3 +153,15 @@ CREATE POLICY "Access topic_variants" ON public.topic_variants
     FOR ALL
     USING (auth.uid() IS NULL OR user_id IS NULL OR user_id = auth.uid())
     WITH CHECK (auth.uid() IS NULL OR user_id IS NULL OR user_id = auth.uid());
+
+-- =====================================================================
+-- 9. PERMISSIONS GRANTS (Allows anon and authenticated clients access)
+-- =====================================================================
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
