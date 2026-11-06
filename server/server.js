@@ -32,6 +32,17 @@ import {
   isSecretKey,
   maskSecret,
 } from './llmService.js';
+import {
+  isSupabaseConfigured,
+  uploadToSupabaseStorage,
+  upsertMaterialInSupabase,
+  saveLearnContentToSupabase,
+  saveQuizToSupabase,
+  saveVisualsToSupabase,
+  saveTopicVariantToSupabase,
+  fetchAllMaterialsFromSupabase,
+  supabaseServer,
+} from './supabase.js';
 
 const require = createRequire(import.meta.url);
 const pdfParse = require('pdf-parse');
@@ -444,9 +455,15 @@ app.patch('/api/materials/:id/opened', (req, res) => {
 });
 
 // Get all materials for a subject (or all subjects)
-app.get('/api/materials', (req, res) => {
+app.get('/api/materials', async (req, res) => {
   try {
     const { subjectId } = req.query;
+    if (isSupabaseConfigured) {
+      const supabaseMaterials = await fetchAllMaterialsFromSupabase(subjectId);
+      if (supabaseMaterials && supabaseMaterials.length > 0) {
+        return res.json(supabaseMaterials);
+      }
+    }
     const query = subjectId
       ? 'SELECT * FROM lessons WHERE subject_id = ? ORDER BY uploaded_at ASC'
       : 'SELECT * FROM lessons ORDER BY uploaded_at ASC';
@@ -560,6 +577,11 @@ app.post('/api/materials/:id/regenerate', async (req, res) => {
       );
 
       const updatedRow = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
+      if (isSupabaseConfigured) {
+        saveLearnContentToSupabase(row.id, generated.learnData);
+        saveQuizToSupabase(row.id, generated.quizQuestions);
+        saveVisualsToSupabase(row.id, generated.visualEpisodes);
+      }
       res.json(formatMaterialFromRow(updatedRow));
     } catch (genErr) {
       materialProgressMap.delete(row.id);
@@ -598,6 +620,11 @@ app.post('/api/materials/:id/topics/:topicIndex/adjust', async (req, res) => {
       JSON.stringify(learnData),
       id
     );
+
+    if (isSupabaseConfigured) {
+      saveTopicVariantToSupabase(id, idx, mode, updatedTopic);
+      saveLearnContentToSupabase(id, learnData);
+    }
 
     const updatedRow = db.prepare('SELECT * FROM lessons WHERE id = ?').get(id);
     return res.json({ success: true, topic: updatedTopic, material: formatMaterialFromRow(updatedRow) });
@@ -785,9 +812,15 @@ app.post('/api/materials/:id/sections/:secId/ask', (req, res) => {
 });
 
 // Backward compatibility: Lessons API
-app.get('/api/lessons', (req, res) => {
+app.get('/api/lessons', async (req, res) => {
   try {
     const { subjectId } = req.query;
+    if (isSupabaseConfigured) {
+      const supabaseMaterials = await fetchAllMaterialsFromSupabase(subjectId);
+      if (supabaseMaterials && supabaseMaterials.length > 0) {
+        return res.json(supabaseMaterials);
+      }
+    }
     const query = subjectId
       ? 'SELECT * FROM lessons WHERE subject_id = ? ORDER BY uploaded_at ASC'
       : 'SELECT * FROM lessons ORDER BY uploaded_at ASC';
@@ -811,8 +844,11 @@ app.get('/api/lessons/:id', (req, res) => {
 });
 
 // Delete lesson ("Pull this seed from the garden")
-app.delete('/api/lessons/:id', (req, res) => {
+app.delete('/api/lessons/:id', async (req, res) => {
   try {
+    if (isSupabaseConfigured && supabaseServer) {
+      await supabaseServer.from('materials').delete().eq('id', req.params.id);
+    }
     const lesson = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
     if (lesson) {
       if (fs.existsSync(lesson.file_path)) {
@@ -1007,6 +1043,20 @@ app.post('/api/lessons/upload', upload.array('files'), async (req, res) => {
       const contentHash = computeContentHash(slides);
       const now = new Date().toISOString();
 
+      let supabaseFileUrl = null;
+      if (isSupabaseConfigured && fs.existsSync(file.path)) {
+        try {
+          supabaseFileUrl = await uploadToSupabaseStorage(
+            fs.readFileSync(file.path),
+            lessonId,
+            file.originalname,
+            file.mimetype || 'application/octet-stream'
+          );
+        } catch (e) {
+          console.warn('[Storage Upload Warning]', e);
+        }
+      }
+
       materialProgressMap.set(lessonId, {
         phase: 'reading',
         current: 1,
@@ -1085,6 +1135,25 @@ app.post('/api/lessons/upload', upload.array('files'), async (req, res) => {
           materialData.contentHash,
           lessonId
         );
+
+        if (isSupabaseConfigured) {
+          saveLearnContentToSupabase(lessonId, materialData.learnData);
+          saveQuizToSupabase(lessonId, materialData.quizQuestions);
+          saveVisualsToSupabase(lessonId, materialData.visualEpisodes);
+          upsertMaterialInSupabase({
+            id: lessonId,
+            subjectId,
+            title: chapterTitle,
+            filePath: supabaseFileUrl || file.path,
+            originalFilename: file.originalname,
+            fileType: ext,
+            fileSize: file.size,
+            totalPages: slides.length,
+            rawSlides: slides,
+            status: 'ready',
+          });
+        }
+
         console.log(`[Upload LLM Generation Complete] for ${lessonId}`);
       }).catch((err) => {
         materialProgressMap.delete(lessonId);
@@ -1221,6 +1290,54 @@ app.post('/api/backup/import', (req, res) => {
 
     res.json({ success: true, message: 'Backup restored successfully' });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// One-click migration endpoint: Exports SQLite to Supabase
+app.post('/api/data/migrate-to-supabase', async (req, res) => {
+  try {
+    if (!isSupabaseConfigured || !supabaseServer) {
+      return res.status(400).json({
+        error: 'Supabase is not configured yet. Add SUPABASE_URL and SUPABASE_ANON_KEY to your environment.'
+      });
+    }
+
+    const materials = db.prepare('SELECT * FROM lessons').all();
+    let migratedCount = 0;
+
+    for (const row of materials) {
+      const rawSlides = JSON.parse(row.raw_slides_json || '[]');
+      const learnData = row.learn_data_json ? JSON.parse(row.learn_data_json) : null;
+      const quizzes = row.quiz_questions_json ? JSON.parse(row.quiz_questions_json) : [];
+      const visuals = row.visual_episodes_json ? JSON.parse(row.visual_episodes_json) : [];
+
+      await upsertMaterialInSupabase({
+        id: row.id,
+        subjectId: row.subject_id,
+        title: row.chapter_title,
+        filePath: row.file_path,
+        originalFilename: row.original_filename || row.chapter_title,
+        fileType: row.file_type || 'pptx',
+        fileSize: row.file_size || 0,
+        totalPages: row.total_pages || rawSlides.length || 0,
+        rawSlides,
+        status: row.status || 'ready',
+      });
+
+      if (learnData) await saveLearnContentToSupabase(row.id, learnData);
+      if (quizzes.length > 0) await saveQuizToSupabase(row.id, quizzes);
+      if (visuals.length > 0) await saveVisualsToSupabase(row.id, visuals);
+      migratedCount++;
+    }
+
+    res.json({
+      success: true,
+      count: migratedCount,
+      message: `Successfully migrated ${migratedCount} material(s) and all AI content to Supabase!`,
+    });
+  } catch (err) {
+    console.error('[Supabase Migration Error]', err);
     res.status(500).json({ error: err.message });
   }
 });

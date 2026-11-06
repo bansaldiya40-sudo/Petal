@@ -6,12 +6,14 @@
   "scripts": {
     "dev": "concurrently \"node server/server.js\" \"vite\"",
     "server": "node server/server.js",
+    "migrate:supabase": "node scripts/migrate-to-supabase.mjs",
     "vite": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "@types/adm-zip": "^0.5.8",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

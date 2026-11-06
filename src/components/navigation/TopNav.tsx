@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Flower2, Sparkles, Wand2, TreePine, Star, X, Volume2, VolumeX, Download, Upload, Database, CheckCircle2, AlertCircle, Loader2, Key, RefreshCw, Flame } from 'lucide-react';
-import { AppSettings, exportBackupUrl, importBackupFile, fetchDataStorageInfo, triggerManualBackup, DataStorageInfo, testAiConnection, checkVideoModel } from '../../services/api';
+import { Flower2, Sparkles, Wand2, TreePine, Star, X, Volume2, VolumeX, Download, Upload, Database, CheckCircle2, AlertCircle, Loader2, Key, RefreshCw, Flame, Cloud, User as UserIcon } from 'lucide-react';
+import { AppSettings, exportBackupUrl, importBackupFile, fetchDataStorageInfo, triggerManualBackup, DataStorageInfo, testAiConnection, checkVideoModel, migrateLocalhostToSupabase } from '../../services/api';
 import { PetalLogo } from '../brand/PetalLogo';
+import { AuthModal } from '../auth/AuthModal';
+import { getCurrentUser, onAuthStateChange, isSupabaseConfigured } from '../../services/supabase';
+import type { User } from '@supabase/supabase-js';
 
 interface TopNavProps {
   currentScreen: 'home' | 'subject' | 'lesson' | 'quiz' | 'progress' | 'design-system';
@@ -28,6 +31,16 @@ export const TopNav: React.FC<TopNavProps> = ({
   const [aiTestResult, setAiTestResult] = useState<{ connected: boolean; model?: string; error?: string } | null>(null);
   const [isReplacingGeminiKey, setIsReplacingGeminiKey] = useState(false);
   const [isReplacingClaudeKey, setIsReplacingClaudeKey] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [migratingSupabase, setMigratingSupabase] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
+
+  useEffect(() => {
+    getCurrentUser().then(setCurrentUser);
+    const unsubscribe = onAuthStateChange(setCurrentUser);
+    return () => unsubscribe();
+  }, []);
   const [checkingVideoModel, setCheckingVideoModel] = useState(false);
   const [videoModelResult, setVideoModelResult] = useState<{ exists: boolean; message: string } | null>(null);
 
@@ -130,8 +143,38 @@ export const TopNav: React.FC<TopNavProps> = ({
               Garden Settings & AI Keys
             </span>
           </div>
+
+          {/* Sticker 4: Cloud Sync & Supabase Login */}
+          <div className="relative group">
+            <button
+              onClick={() => setShowAuthModal(true)}
+              className={`min-h-[44px] px-3.5 rounded-full border-[2.5px] border-[#4B2A7B] shadow-[0_4px_0_#4B2A7B] hover:shadow-[0_2px_0_#4B2A7B] hover:translate-y-[2px] active:translate-y-[4px] active:shadow-none flex items-center gap-1.5 transition-all text-xs font-display font-bold text-[#4B2A7B] cursor-pointer ${
+                currentUser ? 'bg-[#E7DCFF] hover:bg-[#D4C3FA]' : 'bg-white hover:bg-[#FFFDF0]'
+              }`}
+              aria-label="Cloud Sync & Account"
+            >
+              <Cloud className={`w-4 h-4 ${currentUser ? 'text-[#6C3FE0]' : 'text-[#855627]'}`} />
+              <span className="hidden sm:inline">
+                {currentUser ? (currentUser.email?.split('@')[0] || 'Synced') : 'Sync'}
+              </span>
+            </button>
+            {/* Tooltip */}
+            <span className="absolute -bottom-8 right-0 px-2.5 py-1 rounded-xl bg-[#4B2A7B] text-white text-[11px] font-display font-bold opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-md z-50">
+              {currentUser ? `Synced: ${currentUser.email}` : isSupabaseConfigured ? 'Sign in to sync notes' : 'Supabase Cloud Sync'}
+            </span>
+          </div>
         </div>
       </nav>
+
+      {/* Supabase Auth Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={() => {
+          getCurrentUser().then(setCurrentUser);
+          onResetData();
+        }}
+      />
 
       {/* Settings Modal (Hand-drawn Storybook dialog) */}
       {showSettingsModal && (
@@ -550,6 +593,41 @@ export const TopNav: React.FC<TopNavProps> = ({
                       className="hidden"
                     />
                   </label>
+                </div>
+
+                {/* One-Time Supabase Migration Button */}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setMigratingSupabase(true);
+                      setMigrationResult(null);
+                      const res = await migrateLocalhostToSupabase();
+                      setMigratingSupabase(false);
+                      setMigrationResult(res);
+                      if (res.success) {
+                        onResetData();
+                      }
+                    }}
+                    disabled={migratingSupabase}
+                    className="w-full py-2.5 px-3 rounded-2xl bg-gradient-to-r from-[#E7DCFF] via-[#FAF5FF] to-[#DBF5E7] border-2 border-[#B196F5] hover:border-[#6C3FE0] font-display text-xs font-bold text-[#4B2A7B] flex items-center justify-center gap-2 shadow-2xs cursor-pointer disabled:opacity-50"
+                  >
+                    {migratingSupabase ? (
+                      <Loader2 className="w-4 h-4 text-[#6C3FE0] animate-spin" />
+                    ) : (
+                      <Cloud className="w-4 h-4 text-[#6C3FE0]" />
+                    )}
+                    <span>{migratingSupabase ? 'Migrating to Supabase...' : '⚡ Migrate Localhost Data to Supabase'}</span>
+                  </button>
+
+                  {migrationResult && (
+                    <div className={`mt-2 p-2.5 rounded-xl text-xs flex items-center gap-1.5 ${
+                      migrationResult.success ? 'bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]' : 'bg-[#FFF5F5] text-[#9B2C2C] border border-[#FEB2B2]'
+                    }`}>
+                      {migrationResult.success ? <CheckCircle2 className="w-4 h-4 text-[#10B981] shrink-0" /> : <AlertCircle className="w-4 h-4 text-[#C53030] shrink-0" />}
+                      <span>{migrationResult.message || migrationResult.error}</span>
+                    </div>
+                  )}
                 </div>
 
                 <p className="text-[10px] text-[#9B83BA] italic text-center pt-1">

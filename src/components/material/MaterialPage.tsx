@@ -16,7 +16,10 @@ import {
   Sparkles,
   Trash2,
   Share2,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
+import { regenerateMaterial } from '../../services/api';
 
 interface MaterialPageProps {
   material: Material;
@@ -37,6 +40,20 @@ export const MaterialPage: React.FC<MaterialPageProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'learn' | 'quiz' | 'visual'>('learn');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
+  const [isRegenerating, setIsRegenerating] = useState<boolean>(false);
+
+  const handleRegenerate = async () => {
+    if (isRegenerating) return;
+    setIsRegenerating(true);
+    try {
+      await regenerateMaterial(material.id);
+      await onRefreshMaterial();
+    } catch (e) {
+      console.error('[Regenerate Failed]', e);
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
 
   const subject = SUBJECTS[subjectId];
 
@@ -79,13 +96,29 @@ export const MaterialPage: React.FC<MaterialPageProps> = ({
             <span>Back to {subject.title}</span>
           </button>
 
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="p-2.5 rounded-full text-[#855627] hover:text-red-500 hover:bg-red-50 border border-[#EADBBF] transition-colors"
-            title="Delete this material"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRegenerate}
+              disabled={isRegenerating}
+              className="btn-storybook min-h-[44px] px-4 bg-[#FAF5EE] hover:bg-[#F2E8D8] border-2 border-[#EADBBF] text-[#4A3566] text-xs font-display font-bold shadow-2xs inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Regenerate all AI explanations, quizzes, and visuals from lecture slides"
+            >
+              {isRegenerating ? (
+                <Loader2 className="w-4 h-4 text-[#855627] animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 text-[#855627]" />
+              )}
+              <span>{isRegenerating ? 'Regenerating...' : 'Regenerate'}</span>
+            </button>
+
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="p-2.5 rounded-full text-[#855627] hover:text-red-500 hover:bg-red-50 border border-[#EADBBF] transition-colors"
+              title="Delete this material"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* ======================================================== */}

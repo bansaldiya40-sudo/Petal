@@ -234,6 +234,19 @@ export async function triggerManualBackup(): Promise<{ success: boolean; backupN
   }
 }
 
+export async function migrateLocalhostToSupabase(): Promise<{ success: boolean; count?: number; message?: string; error?: string }> {
+  try {
+    const res = await fetch('/api/data/migrate-to-supabase', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Migration failed');
+    }
+    return data;
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Migration request failed' };
+  }
+}
+
 export async function recordMaterialOpened(materialId: string): Promise<void> {
   try {
     await fetch(`/api/materials/${materialId}/opened`, { method: 'PATCH' });
