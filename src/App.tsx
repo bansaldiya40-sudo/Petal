@@ -7,6 +7,7 @@ import {
   deleteLesson,
   updateConceptStatus,
   fetchGarden,
+  getCachedLessons,
   AppSettings,
 } from './services/api';
 import { TopNav } from './components/navigation/TopNav';
@@ -19,11 +20,17 @@ import { triggerPetalsCelebration } from './utils/confetti';
 
 // Persistent storybook LMS with sacred data isolation outside project
 export function App() {
-  const [currentScreen, setCurrentScreen] = useState<'home' | 'subject' | 'progress'>('home');
-  const [activeSubjectId, setActiveSubjectId] = useState<SubjectId>('pm2');
-  const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
+  const [currentScreen, setCurrentScreen] = useState<'home' | 'subject' | 'progress'>(() => {
+    return (localStorage.getItem('petal_current_screen') as any) || 'home';
+  });
+  const [activeSubjectId, setActiveSubjectId] = useState<SubjectId>(() => {
+    return (localStorage.getItem('petal_active_subject') as SubjectId) || 'pm2';
+  });
+  const [activeLessonId, setActiveLessonId] = useState<string | null>(() => {
+    return localStorage.getItem('petal_active_lesson') || null;
+  });
 
-  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [lessons, setLessons] = useState<Lesson[]>(() => getCachedLessons());
   const [gardenData, setGardenData] = useState<{ streak: number; plants: GardenPlant[] }>({
     streak: 1,
     plants: [],
@@ -39,7 +46,24 @@ export function App() {
     reducedMotion: false,
   });
 
-  // Load persistent data from SQLite backend on mount
+  // Persist navigation states across browser reloads
+  useEffect(() => {
+    localStorage.setItem('petal_current_screen', currentScreen);
+  }, [currentScreen]);
+
+  useEffect(() => {
+    localStorage.setItem('petal_active_subject', activeSubjectId);
+  }, [activeSubjectId]);
+
+  useEffect(() => {
+    if (activeLessonId) {
+      localStorage.setItem('petal_active_lesson', activeLessonId);
+    } else {
+      localStorage.removeItem('petal_active_lesson');
+    }
+  }, [activeLessonId]);
+
+  // Load persistent data from Supabase / SQLite backend on mount
   useEffect(() => {
     async function loadAllData() {
       const [fetchedSettings, fetchedLessons, fetchedGarden] = await Promise.all([
@@ -49,7 +73,7 @@ export function App() {
       ]);
 
       if (fetchedSettings) setSettings(fetchedSettings);
-      if (fetchedLessons) setLessons(fetchedLessons);
+      if (fetchedLessons && fetchedLessons.length > 0) setLessons(fetchedLessons);
       if (fetchedGarden) setGardenData(fetchedGarden);
     }
     loadAllData();
@@ -58,6 +82,7 @@ export function App() {
   // Handlers
   const handleSelectSubject = (subjectId: SubjectId) => {
     setActiveSubjectId(subjectId);
+    setActiveLessonId(null);
     setCurrentScreen('subject');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -79,9 +104,18 @@ export function App() {
   };
 
   const handleDeleteLesson = async (lessonId: string) => {
+    // 1. Optimistic removal for instant UI feedback
+    setLessons((prev) => prev.filter((l) => l.id !== lessonId));
+    if (activeLessonId === lessonId) {
+      setActiveLessonId(null);
+    }
+    // 2. Cascade delete from Supabase, cache, and backend
     await deleteLesson(lessonId);
+    // 3. Sync with fresh collection
     const updated = await fetchLessons();
-    setLessons(updated);
+    if (updated) {
+      setLessons(updated);
+    }
   };
 
   const handleConceptBloomed = async (concept: Concept) => {
@@ -151,7 +185,12 @@ export function App() {
               <SubjectScreen
                 subjectId={activeSubjectId}
                 lessons={lessons}
-                onBackToHome={() => setCurrentScreen('home')}
+                initialMaterialId={activeLessonId}
+                onActiveMaterialChange={setActiveLessonId}
+                onBackToHome={() => {
+                  setActiveLessonId(null);
+                  setCurrentScreen('home');
+                }}
                 onLessonCreated={handleLessonCreated}
                 onDeleteLesson={handleDeleteLesson}
                 onConceptBloomed={handleConceptBloomed}

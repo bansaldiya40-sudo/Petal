@@ -22,6 +22,8 @@ import {
 interface SubjectScreenProps {
   subjectId: SubjectId;
   lessons: Lesson[];
+  initialMaterialId?: string | null;
+  onActiveMaterialChange?: (materialId: string | null) => void;
   onBackToHome: () => void;
   onLessonCreated: (lessons: Lesson[]) => void;
   onDeleteLesson: (lessonId: string) => void;
@@ -50,19 +52,53 @@ type SortOption = 'oldest' | 'newest' | 'name' | 'recently_opened';
 export const SubjectScreen: React.FC<SubjectScreenProps> = ({
   subjectId,
   lessons,
+  initialMaterialId,
+  onActiveMaterialChange,
   onBackToHome,
   onLessonCreated,
   onDeleteLesson,
   onRefreshMaterials,
   reducedMotion = false,
 }) => {
-  const [activeMaterial, setActiveMaterial] = useState<Material | null>(null);
+  const [activeMaterial, setActiveMaterial] = useState<Material | null>(() => {
+    if (initialMaterialId) {
+      const found = (lessons as Material[]).find((l) => l.id === initialMaterialId);
+      if (found) return found;
+    }
+    return null;
+  });
   const [isSeedModalOpen, setIsSeedModalOpen] = useState<boolean>(false);
   const [materialToDelete, setMaterialToDelete] = useState<Material | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('oldest');
 
   const subject = SUBJECTS[subjectId];
   const subjectMaterials = (lessons as Material[]).filter((l) => l.subjectId === subjectId);
+
+  // Sync activeMaterial when lessons or initialMaterialId change
+  useEffect(() => {
+    if (initialMaterialId && !activeMaterial) {
+      const found = (lessons as Material[]).find((l) => l.id === initialMaterialId);
+      if (found) {
+        setActiveMaterial(found);
+      }
+    } else if (activeMaterial) {
+      const updated = (lessons as Material[]).find((l) => l.id === activeMaterial.id);
+      if (updated) {
+        setActiveMaterial(updated);
+      }
+    }
+  }, [initialMaterialId, lessons]);
+
+  const handleOpenMaterial = (mat: Material) => {
+    recordMaterialOpened(mat.id);
+    setActiveMaterial(mat);
+    onActiveMaterialChange?.(mat.id);
+  };
+
+  const handleCloseMaterial = () => {
+    setActiveMaterial(null);
+    onActiveMaterialChange?.(null);
+  };
 
   const sortedMaterials = [...subjectMaterials].sort((a, b) => {
     if (sortBy === 'oldest') {
@@ -82,21 +118,6 @@ export const SubjectScreen: React.FC<SubjectScreenProps> = ({
     return 0;
   });
 
-  const handleOpenMaterial = (mat: Material) => {
-    recordMaterialOpened(mat.id);
-    setActiveMaterial(mat);
-  };
-
-  // Keep activeMaterial in sync when lessons update (e.g. from background generation poll)
-  useEffect(() => {
-    if (activeMaterial) {
-      const updated = (lessons as Material[]).find((l) => l.id === activeMaterial.id);
-      if (updated) {
-        setActiveMaterial(updated);
-      }
-    }
-  }, [lessons]);
-
   // If a material is open, render its Material Page
   if (activeMaterial) {
     return (
@@ -109,10 +130,10 @@ export const SubjectScreen: React.FC<SubjectScreenProps> = ({
         <MaterialPage
           material={activeMaterial}
           subjectId={subjectId}
-          onBackToSubject={() => setActiveMaterial(null)}
+          onBackToSubject={handleCloseMaterial}
           onDeleteMaterial={(id) => {
             onDeleteLesson(id);
-            setActiveMaterial(null);
+            handleCloseMaterial();
           }}
           onRefreshMaterial={async () => {
             if (onRefreshMaterials) {
@@ -327,10 +348,11 @@ export const SubjectScreen: React.FC<SubjectScreenProps> = ({
                         e.stopPropagation();
                         setMaterialToDelete(mat);
                       }}
-                      className="w-10 h-10 rounded-full text-[#9B83BA] hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
-                      title="Pull this seed from the garden"
+                      className="min-h-[44px] px-3.5 rounded-full bg-[#FFF2F4] hover:bg-[#FFE0E6] border border-[#F5B8C6] text-[#C0392B] flex items-center gap-1.5 transition-all shadow-2xs hover:shadow-xs cursor-pointer"
+                      title="Pull this seed from the garden (Delete material)"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4 text-[#C0392B]" />
+                      <span className="text-xs font-display font-bold">Delete</span>
                     </button>
                   </div>
                 </div>

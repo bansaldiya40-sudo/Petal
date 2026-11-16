@@ -12,6 +12,7 @@ import {
 } from '../types';
 import {
   isSupabaseConfigured,
+  supabase,
   fetchMaterialsFromSupabase,
   fetchSingleMaterialFromSupabase,
   uploadFileToSupabaseStorage,
@@ -176,21 +177,74 @@ export async function saveSettings(settings: Partial<AppSettings>): Promise<void
   });
 }
 
+// LocalStorage Cache Key for 0ms refresh persistence
+export const LESSONS_CACHE_KEY = 'petal_lessons_cache';
+
+export function getCachedLessons(): Lesson[] {
+  try {
+    const raw = localStorage.getItem(LESSONS_CACHE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('[Cache] Could not read lessons cache:', e);
+  }
+  return [];
+}
+
+export function setCachedLessons(lessons: Lesson[]): void {
+  try {
+    if (Array.isArray(lessons)) {
+      localStorage.setItem(LESSONS_CACHE_KEY, JSON.stringify(lessons));
+    }
+  } catch (e) {
+    console.warn('[Cache] Could not save lessons cache:', e);
+  }
+}
+
 export async function fetchLessons(subjectId?: SubjectId): Promise<Lesson[]> {
   try {
+    let lessons: Lesson[] = [];
+
+    // 1. Fetch from Supabase PostgreSQL (Cloud Ground Truth)
     if (isSupabaseConfigured) {
       const supaMaterials = await fetchMaterialsFromSupabase(subjectId);
       if (supaMaterials && supaMaterials.length > 0) {
-        return supaMaterials as unknown as Lesson[];
+        lessons = supaMaterials as unknown as Lesson[];
       }
     }
-    const url = subjectId ? `/api/lessons?subjectId=${subjectId}` : '/api/lessons';
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Lessons fetch failed');
-    return await res.json();
+
+    // 2. Fallback to Express backend if Supabase empty
+    if (lessons.length === 0) {
+      const url = subjectId ? `/api/lessons?subjectId=${subjectId}` : '/api/lessons';
+      const res = await fetch(url);
+      if (res.ok) {
+        lessons = await res.json();
+      }
+    }
+
+    // 3. Cache results to localStorage for instant subsequent reloads
+    if (lessons.length > 0) {
+      if (!subjectId) {
+        setCachedLessons(lessons);
+      } else {
+        const cached = getCachedLessons();
+        const otherSubjects = cached.filter((l) => l.subjectId !== subjectId);
+        setCachedLessons([...otherSubjects, ...lessons]);
+      }
+      return lessons;
+    }
+
+    // 4. Fallback to cached lessons if network returned 0
+    const cached = getCachedLessons();
+    return subjectId ? cached.filter((l) => l.subjectId === subjectId) : cached;
   } catch (err) {
-    console.warn('Error fetching lessons', err);
-    return [];
+    console.warn('Error fetching lessons, using cached fallback', err);
+    const cached = getCachedLessons();
+    return subjectId ? cached.filter((l) => l.subjectId === subjectId) : cached;
   }
 }
 
@@ -209,7 +263,43 @@ export async function fetchLessonById(id: string): Promise<Lesson | null> {
 }
 
 export async function uploadMaterials(files: File[], subjectId: SubjectId): Promise<Lesson[]> {
-  // Direct Supabase storage & database upload for cloud resilience
+  // First attempt backend upload route which extracts slides & generates AI study pages
+  try {
+    const formData = new FormData();
+    files.forEach((f) => formData.append('files', f));
+    formData.append('subjectId', subjectId);
+
+    const res = await fetch('/api/lessons/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.lessons && data.lessons.length > 0) {
+        // Persist newly uploaded materials to Supabase if configured
+        if (isSupabaseConfigured) {
+          for (const lesson of data.lessons) {
+            try {
+              await saveMaterialToSupabase(lesson);
+            } catch (supaErr) {
+              console.warn('[Supabase save notice]', supaErr);
+            }
+          }
+        }
+        // Update local storage cache immediately
+        const currentCached = getCachedLessons();
+        const merged = [...data.lessons, ...currentCached.filter((c) => !data.lessons.some((n: any) => n.id === c.id))];
+        setCachedLessons(merged);
+
+        return await fetchLessons();
+      }
+    }
+  } catch (serverErr) {
+    console.warn('Backend upload notice, attempting client-side fallback upload:', serverErr);
+  }
+
+  // Fallback: Direct client-side Supabase storage & database upload
   if (isSupabaseConfigured) {
     try {
       const createdLessons: Lesson[] = [];
@@ -251,34 +341,23 @@ export async function uploadMaterials(files: File[], subjectId: SubjectId): Prom
         });
       }
 
-      // Refresh complete collection
+      // Refresh complete collection & update cache
       const supaUpdated = await fetchMaterialsFromSupabase();
       if (supaUpdated && supaUpdated.length > 0) {
+        setCachedLessons(supaUpdated as unknown as Lesson[]);
         return supaUpdated as unknown as Lesson[];
       }
+
+      const currentCached = getCachedLessons();
+      setCachedLessons([...createdLessons, ...currentCached]);
       return createdLessons;
-    } catch (supaUploadErr) {
-      console.warn('Supabase direct upload notice, falling back to server route:', supaUploadErr);
+    } catch (supaUploadErr: any) {
+      console.error('Direct Supabase upload error:', supaUploadErr);
+      throw new Error(supaUploadErr.message || 'Upload failed');
     }
   }
 
-  // Fallback to Express server upload route
-  const formData = new FormData();
-  files.forEach((f) => formData.append('files', f));
-  formData.append('subjectId', subjectId);
-
-  const res = await fetch('/api/lessons/upload', {
-    method: 'POST',
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.error || `Upload failed (${res.status} ${res.statusText})`);
-  }
-
-  const data = await res.json();
-  return await fetchLessons();
+  throw new Error('Upload could not be processed. Please check your document.');
 }
 
 export interface DataStorageInfo {
@@ -335,9 +414,32 @@ export async function updateLessonTitle(lessonId: string, newTitle: string): Pro
 }
 
 export async function deleteLesson(lessonId: string): Promise<void> {
-  await fetch(`/api/lessons/${lessonId}`, {
-    method: 'DELETE',
-  });
+  // 1. Immediately remove from localStorage cache so UI and reloads never see it
+  try {
+    const cached = getCachedLessons();
+    const filtered = cached.filter((l) => l.id !== lessonId);
+    setCachedLessons(filtered);
+  } catch (e) {
+    console.warn('[Delete Cache Notice]', e);
+  }
+
+  // 2. Delete from Supabase PostgreSQL directly (cascades to learn_content, quizzes, visuals, variants)
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('materials').delete().eq('id', lessonId);
+    } catch (supaErr) {
+      console.warn('[Delete Supabase Notice]', supaErr);
+    }
+  }
+
+  // 3. Delete from backend Express server (cleans local storage file & SQLite)
+  try {
+    await fetch(`/api/lessons/${lessonId}`, {
+      method: 'DELETE',
+    });
+  } catch (backendErr) {
+    console.warn('[Delete Backend Notice]', backendErr);
+  }
 }
 
 export async function updateConceptStatus(conceptId: string, status: 'locked' | 'current' | 'bloomed'): Promise<void> {

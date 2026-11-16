@@ -113,10 +113,11 @@ export const MaterialPage: React.FC<MaterialPageProps> = ({
 
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="p-2.5 rounded-full text-[#855627] hover:text-red-500 hover:bg-red-50 border border-[#EADBBF] transition-colors"
-              title="Delete this material"
+              className="btn-storybook min-h-[44px] px-3.5 bg-[#FFF0F2] hover:bg-[#FFE0E6] border-2 border-[#F5A9B8] text-[#C0392B] text-xs font-display font-bold shadow-2xs inline-flex items-center gap-1.5 cursor-pointer transition-all"
+              title="Pull this seed from the garden (Delete material)"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-4 h-4 text-[#C0392B]" />
+              <span>Delete Material</span>
             </button>
           </div>
         </div>
