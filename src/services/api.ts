@@ -10,6 +10,14 @@ import {
   VideoSpendInfo,
   ExplainerSummary,
 } from '../types';
+import {
+  isSupabaseConfigured,
+  fetchMaterialsFromSupabase,
+  fetchSingleMaterialFromSupabase,
+  uploadFileToSupabaseStorage,
+  saveMaterialToSupabase,
+} from './supabase';
+import { parseUploadedFile } from './parser';
 
 export interface AppSettings {
   userName: string;
@@ -168,6 +176,12 @@ export async function saveSettings(settings: Partial<AppSettings>): Promise<void
 
 export async function fetchLessons(subjectId?: SubjectId): Promise<Lesson[]> {
   try {
+    if (isSupabaseConfigured) {
+      const supaMaterials = await fetchMaterialsFromSupabase(subjectId);
+      if (supaMaterials && supaMaterials.length > 0) {
+        return supaMaterials as unknown as Lesson[];
+      }
+    }
     const url = subjectId ? `/api/lessons?subjectId=${subjectId}` : '/api/lessons';
     const res = await fetch(url);
     if (!res.ok) throw new Error('Lessons fetch failed');
@@ -180,6 +194,10 @@ export async function fetchLessons(subjectId?: SubjectId): Promise<Lesson[]> {
 
 export async function fetchLessonById(id: string): Promise<Lesson | null> {
   try {
+    if (isSupabaseConfigured) {
+      const supaMaterial = await fetchSingleMaterialFromSupabase(id);
+      if (supaMaterial) return supaMaterial as unknown as Lesson;
+    }
     const res = await fetch(`/api/lessons/${id}`);
     if (!res.ok) return null;
     return await res.json();
@@ -189,6 +207,60 @@ export async function fetchLessonById(id: string): Promise<Lesson | null> {
 }
 
 export async function uploadMaterials(files: File[], subjectId: SubjectId): Promise<Lesson[]> {
+  // Direct Supabase storage & database upload for cloud resilience
+  if (isSupabaseConfigured) {
+    try {
+      const createdLessons: Lesson[] = [];
+
+      for (const file of files) {
+        const materialId = `mat-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+
+        // 1. Upload original deck to Supabase Storage bucket 'materials'
+        let publicUrl: string | null = null;
+        try {
+          publicUrl = await uploadFileToSupabaseStorage(file, materialId);
+        } catch (storageErr) {
+          console.warn('[Supabase Storage Warning]', storageErr);
+        }
+
+        // 2. Parse file structure client-side
+        const parsedLesson = await parseUploadedFile(file, subjectId);
+
+        // 3. Save material row in Supabase PostgreSQL
+        const materialRecord: Partial<Material> & { id: string; subjectId: SubjectId; title: string } = {
+          id: materialId,
+          subjectId,
+          title: parsedLesson.title,
+          fileName: file.name,
+          filePath: publicUrl || '',
+          fileType: parsedLesson.fileType,
+          fileSize: file.size,
+          totalPages: parsedLesson.rawSlides?.length || 1,
+          rawSlides: parsedLesson.rawSlides,
+          status: 'ready',
+        };
+
+        await saveMaterialToSupabase(materialRecord);
+
+        createdLessons.push({
+          ...parsedLesson,
+          id: materialId,
+          filePath: publicUrl || undefined,
+        });
+      }
+
+      // Refresh complete collection
+      const supaUpdated = await fetchMaterialsFromSupabase();
+      if (supaUpdated && supaUpdated.length > 0) {
+        return supaUpdated as unknown as Lesson[];
+      }
+      return createdLessons;
+    } catch (supaUploadErr) {
+      console.warn('Supabase direct upload notice, falling back to server route:', supaUploadErr);
+    }
+  }
+
+  // Fallback to Express server upload route
   const formData = new FormData();
   files.forEach((f) => formData.append('files', f));
   formData.append('subjectId', subjectId);
@@ -200,11 +272,10 @@ export async function uploadMaterials(files: File[], subjectId: SubjectId): Prom
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.error || 'Upload failed');
+    throw new Error(errData.error || `Upload failed (${res.status} ${res.statusText})`);
   }
 
   const data = await res.json();
-  // Fetch all lessons across subjects to maintain complete state
   return await fetchLessons();
 }
 

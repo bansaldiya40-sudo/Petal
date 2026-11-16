@@ -41,16 +41,41 @@ import {
   saveVisualsToSupabase,
   saveTopicVariantToSupabase,
   fetchAllMaterialsFromSupabase,
+  fetchSingleMaterialFromSupabase,
   supabaseServer,
 } from './supabase.js';
 
 const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+let pdfParse = null;
+try {
+  pdfParse = require('pdf-parse');
+} catch (e) {
+  console.warn('pdf-parse could not be loaded:', e.message);
+}
+
+async function extractTextFromPdfBuffer(buffer) {
+  if (!pdfParse) return '';
+  try {
+    if (typeof pdfParse === 'function') {
+      const data = await pdfParse(buffer);
+      return data.text || '';
+    } else if (pdfParse.PDFParse) {
+      const parser = new pdfParse.PDFParse({ data: buffer });
+      const text = await parser.getText();
+      return text?.text || text || '';
+    }
+  } catch (err) {
+    console.warn('PDF parse error:', err.message);
+  }
+  return '';
+}
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -62,16 +87,18 @@ app.use(express.json({ limit: '50mb' }));
 app.use('/data/uploads', express.static(UPLOADS_DIR));
 app.use('/data/clips', express.static(CLIPS_DIR));
 
-// Configure multer to store files permanently in dedicated UPLOADS_DIR
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, UPLOADS_DIR);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-    cb(null, `${uniqueSuffix}-${file.originalname}`);
-  },
-});
+// Configure multer to store files permanently in dedicated UPLOADS_DIR or in-memory on Vercel
+const storage = isVercel
+  ? multer.memoryStorage()
+  : multer.diskStorage({
+      destination: (req, file, cb) => {
+        cb(null, UPLOADS_DIR);
+      },
+      filename: (req, file, cb) => {
+        const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+        cb(null, `${uniqueSuffix}-${file.originalname}`);
+      },
+    });
 
 const upload = multer({
   storage,
@@ -83,7 +110,9 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     app: 'Petal Storybook LMS Backend',
-    database: 'SQLite (better-sqlite3) persistent',
+    database: isSupabaseConfigured ? 'Supabase PostgreSQL' : 'SQLite (better-sqlite3) persistent',
+    supabaseConfigured: isSupabaseConfigured,
+    serverless: isVercel,
     dataDir: DATA_DIR,
     geminiConfigured: !!process.env.GEMINI_API_KEY,
     claudeConfigured: !!process.env.ANTHROPIC_API_KEY,
@@ -91,65 +120,67 @@ app.get('/api/health', (req, res) => {
 });
 
 // Auto-migration & validation for all existing saved materials
-try {
-  const allSavedMaterials = db.prepare('SELECT id, chapter_title, raw_slides_json, sections_json, learn_overview_json FROM lessons').all();
-  for (const row of allSavedMaterials) {
-    let rawSlides = JSON.parse(row.raw_slides_json || '[]');
-    let sections = row.sections_json ? JSON.parse(row.sections_json) : [];
-    let overview = row.learn_overview_json ? JSON.parse(row.learn_overview_json) : {};
-    let updated = false;
+if (!isVercel) {
+  try {
+    const allSavedMaterials = db.prepare('SELECT id, chapter_title, raw_slides_json, sections_json, learn_overview_json FROM lessons').all();
+    for (const row of allSavedMaterials) {
+      let rawSlides = JSON.parse(row.raw_slides_json || '[]');
+      let sections = row.sections_json ? JSON.parse(row.sections_json) : [];
+      let overview = row.learn_overview_json ? JSON.parse(row.learn_overview_json) : {};
+      let updated = false;
 
-    if (!Array.isArray(sections) || sections.length === 0) {
-      sections = groupSlidesIntoSections(rawSlides).map((s) => ({
-        ...s,
-        status: 'needs_generation',
-        inSimpleWords: '',
-        examples: [],
-        extraExamples: [],
-        keyTerms: [],
-        commonMistakes: [],
-        formulas: [],
-      }));
-      updated = true;
-    } else {
-      sections = sections.map((s, idx) => {
-        let secUpdated = false;
-        if (!s.examples) { s.examples = []; secUpdated = true; }
-        if (!s.extraExamples) { s.extraExamples = []; secUpdated = true; }
-        if (!s.keyTerms) { s.keyTerms = []; secUpdated = true; }
-        if (!s.commonMistakes) { s.commonMistakes = []; secUpdated = true; }
-        if (!s.formulas) { s.formulas = []; secUpdated = true; }
-        if (typeof s.inSimpleWords !== 'string') { s.inSimpleWords = ''; secUpdated = true; }
-        if (!s.status) { s.status = s.inSimpleWords ? 'ready' : 'needs_generation'; secUpdated = true; }
-        if (secUpdated) updated = true;
-        return s;
-      });
-    }
+      if (!Array.isArray(sections) || sections.length === 0) {
+        sections = groupSlidesIntoSections(rawSlides).map((s) => ({
+          ...s,
+          status: 'needs_generation',
+          inSimpleWords: '',
+          examples: [],
+          extraExamples: [],
+          keyTerms: [],
+          commonMistakes: [],
+          formulas: [],
+        }));
+        updated = true;
+      } else {
+        sections = sections.map((s, idx) => {
+          let secUpdated = false;
+          if (!s.examples) { s.examples = []; secUpdated = true; }
+          if (!s.extraExamples) { s.extraExamples = []; secUpdated = true; }
+          if (!s.keyTerms) { s.keyTerms = []; secUpdated = true; }
+          if (!s.commonMistakes) { s.commonMistakes = []; secUpdated = true; }
+          if (!s.formulas) { s.formulas = []; secUpdated = true; }
+          if (typeof s.inSimpleWords !== 'string') { s.inSimpleWords = ''; secUpdated = true; }
+          if (!s.status) { s.status = s.inSimpleWords ? 'ready' : 'needs_generation'; secUpdated = true; }
+          if (secUpdated) updated = true;
+          return s;
+        });
+      }
 
-    if (!Array.isArray(overview.roadmap) || !Array.isArray(overview.quickRecap) || !Array.isArray(overview.miniMemoryAids) || overview.roadmap.length === 0) {
-      overview.bigPicture = overview.bigPicture || `Comprehensive study guide for ${toTitleCase(row.chapter_title)}.`;
-      overview.roadmap = Array.isArray(overview.roadmap) && overview.roadmap.length > 0
-        ? overview.roadmap
-        : sections.map((s, idx) => ({ sectionId: s.id || `sec-${idx+1}`, title: s.title || `Section ${idx+1}`, summary: s.slidesRange || '' }));
-      overview.quickRecap = Array.isArray(overview.quickRecap) && overview.quickRecap.length > 0
-        ? overview.quickRecap
-        : [`Covers ${sections.length} core sections of ${toTitleCase(row.chapter_title)}.`];
-      overview.miniMemoryAids = Array.isArray(overview.miniMemoryAids) && overview.miniMemoryAids.length > 0
-        ? overview.miniMemoryAids
-        : sections.map((s) => ({ sectionTitle: s.title || 'Section', aid: s.slidesRange || '' }));
-      updated = true;
-    }
+      if (!Array.isArray(overview.roadmap) || !Array.isArray(overview.quickRecap) || !Array.isArray(overview.miniMemoryAids) || overview.roadmap.length === 0) {
+        overview.bigPicture = overview.bigPicture || `Comprehensive study guide for ${toTitleCase(row.chapter_title)}.`;
+        overview.roadmap = Array.isArray(overview.roadmap) && overview.roadmap.length > 0
+          ? overview.roadmap
+          : sections.map((s, idx) => ({ sectionId: s.id || `sec-${idx+1}`, title: s.title || `Section ${idx+1}`, summary: s.slidesRange || '' }));
+        overview.quickRecap = Array.isArray(overview.quickRecap) && overview.quickRecap.length > 0
+          ? overview.quickRecap
+          : [`Covers ${sections.length} core sections of ${toTitleCase(row.chapter_title)}.`];
+        overview.miniMemoryAids = Array.isArray(overview.miniMemoryAids) && overview.miniMemoryAids.length > 0
+          ? overview.miniMemoryAids
+          : sections.map((s) => ({ sectionTitle: s.title || 'Section', aid: s.slidesRange || '' }));
+        updated = true;
+      }
 
-    if (updated) {
-      db.prepare('UPDATE lessons SET sections_json = ?, learn_overview_json = ? WHERE id = ?').run(
-        JSON.stringify(sections),
-        JSON.stringify(overview),
-        row.id
-      );
+      if (updated) {
+        db.prepare('UPDATE lessons SET sections_json = ?, learn_overview_json = ? WHERE id = ?').run(
+          JSON.stringify(sections),
+          JSON.stringify(overview),
+          row.id
+        );
+      }
     }
+  } catch (migrateErr) {
+    console.warn('[Startup Migration Warning]', migrateErr.message);
   }
-} catch (migrateErr) {
-  console.warn('[Startup Migration Warning]', migrateErr.message);
 }
 
 // --- Data Storage Info & Manual Backup API ---
@@ -832,8 +863,12 @@ app.get('/api/lessons', async (req, res) => {
   }
 });
 
-app.get('/api/lessons/:id', (req, res) => {
+app.get('/api/lessons/:id', async (req, res) => {
   try {
+    if (isSupabaseConfigured) {
+      const supaMaterial = await fetchSingleMaterialFromSupabase(req.params.id);
+      if (supaMaterial) return res.json(supaMaterial);
+    }
     const row = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Lesson not found' });
     const lesson = formatMaterialFromRow(row);
@@ -925,14 +960,14 @@ app.post('/api/lessons/upload', upload.array('files'), async (req, res) => {
 
     for (const file of files) {
       const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
-      const buffer = fs.readFileSync(file.path);
+      const buffer = file.buffer || (file.path && fs.existsSync(file.path) ? fs.readFileSync(file.path) : Buffer.from([]));
       let slides = [];
 
       // Extract text based on file type
       if (ext === 'pdf') {
         try {
-          const data = await pdfParse(buffer);
-          const pages = data.text.split(/\f|\n(?=Page \d+)/i);
+          const pdfText = await extractTextFromPdfBuffer(buffer);
+          const pages = pdfText.split(/\f|\n(?=Page \d+)/i);
           pages.forEach((pageText, idx) => {
             const trimmed = pageText.trim();
             if (trimmed.length > 0) {
@@ -1028,12 +1063,15 @@ app.post('/api/lessons/upload', upload.array('files'), async (req, res) => {
           .replace(/[-_]/g, ' ')
       );
 
-      const existingMatches = db.prepare(
-        'SELECT chapter_title FROM lessons WHERE subject_id = ? AND chapter_title LIKE ?'
-      ).all(subjectId, `${baseTitle}%`);
+      let existingMatches = [];
+      try {
+        existingMatches = db.prepare(
+          'SELECT chapter_title FROM lessons WHERE subject_id = ? AND chapter_title LIKE ?'
+        ).all(subjectId, `${baseTitle}%`);
+      } catch (_) {}
 
       let chapterTitle = baseTitle;
-      if (existingMatches.length > 0) {
+      if (existingMatches && existingMatches.length > 0) {
         chapterTitle = `${baseTitle} (${existingMatches.length + 1})`;
       }
 
@@ -1044,10 +1082,10 @@ app.post('/api/lessons/upload', upload.array('files'), async (req, res) => {
       const now = new Date().toISOString();
 
       let supabaseFileUrl = null;
-      if (isSupabaseConfigured && fs.existsSync(file.path)) {
+      if (isSupabaseConfigured && buffer && buffer.length > 0) {
         try {
           supabaseFileUrl = await uploadToSupabaseStorage(
-            fs.readFileSync(file.path),
+            buffer,
             lessonId,
             file.originalname,
             file.mimetype || 'application/octet-stream'
@@ -1169,35 +1207,69 @@ app.post('/api/lessons/upload', upload.array('files'), async (req, res) => {
       });
 
       // Create legacy concepts for backward compatibility
-      const concepts = generateBiteSizedConcepts(subjectId, lessonId, chapterTitle, slides);
-      const insertConcept = db.prepare(`
-        INSERT INTO concepts (id, lesson_id, subject_id, concept_order, title, one_sentence_summary, source_slide, status, plain_explanation, analogy, deep_explanation, key_terms_json, examples_json, quick_check_json, animation_json, quiz_questions_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
+      try {
+        const concepts = generateBiteSizedConcepts(subjectId, lessonId, chapterTitle, slides);
+        const insertConcept = db.prepare(`
+          INSERT INTO concepts (id, lesson_id, subject_id, concept_order, title, one_sentence_summary, source_slide, status, plain_explanation, analogy, deep_explanation, key_terms_json, examples_json, quick_check_json, animation_json, quiz_questions_json)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
 
-      concepts.forEach((c) => {
-        insertConcept.run(
-          c.id,
-          lessonId,
+        concepts.forEach((c) => {
+          insertConcept.run(
+            c.id,
+            lessonId,
+            subjectId,
+            c.conceptOrder,
+            c.title,
+            c.oneSentenceSummary,
+            c.sourceSlide,
+            c.status,
+            c.plainExplanation,
+            c.analogy,
+            c.deepExplanation,
+            JSON.stringify(c.keyTerms),
+            JSON.stringify(c.examples),
+            JSON.stringify(c.quickCheck),
+            JSON.stringify(c.animation),
+            JSON.stringify(c.quizQuestions)
+          );
+        });
+      } catch (_) {}
+
+      let formattedLesson = null;
+      try {
+        const insertedRow = db.prepare('SELECT * FROM lessons WHERE id = ?').get(lessonId);
+        if (insertedRow) {
+          formattedLesson = formatMaterialFromRow(insertedRow);
+        }
+      } catch (_) {}
+
+      if (!formattedLesson) {
+        formattedLesson = {
+          id: lessonId,
           subjectId,
-          c.conceptOrder,
-          c.title,
-          c.oneSentenceSummary,
-          c.sourceSlide,
-          c.status,
-          c.plainExplanation,
-          c.analogy,
-          c.deepExplanation,
-          JSON.stringify(c.keyTerms),
-          JSON.stringify(c.examples),
-          JSON.stringify(c.quickCheck),
-          JSON.stringify(c.animation),
-          JSON.stringify(c.quizQuestions)
-        );
-      });
+          title: chapterTitle,
+          fileName: file.originalname,
+          filePath: supabaseFileUrl || '',
+          fileType: ext,
+          fileSize: file.size,
+          totalPages: slides.length,
+          uploadedAt: now,
+          status: 'ready',
+          masteryScore: 0,
+          rawSlides: slides,
+          sections: [],
+          learnOverview: {
+            bigPicture: `Synthesizing grounded lecture overview for ${chapterTitle}...`,
+            roadmap: [],
+            quickRecap: [`Reading ${slides.length} slides from ${file.originalname}...`],
+            miniMemoryAids: [],
+          },
+          concepts: [],
+        };
+      }
 
-      const insertedRow = db.prepare('SELECT * FROM lessons WHERE id = ?').get(lessonId);
-      createdLessons.push(formatMaterialFromRow(insertedRow));
+      createdLessons.push(formattedLesson);
     }
 
     res.json({

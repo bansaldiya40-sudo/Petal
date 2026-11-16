@@ -233,7 +233,7 @@ export const SeedPouchModal: React.FC<SeedPouchModalProps> = ({
         )}
 
         <p className="text-[13px] text-center text-[#9B83BA] font-body mt-4">
-          🔒 Stored permanently in your dedicated database (~/PetalData). Never overwritten.
+          🔒 Stored permanently in your Supabase cloud database & dedicated storage. Never overwritten.
         </p>
       </div>
     </div>

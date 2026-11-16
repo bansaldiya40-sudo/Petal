@@ -229,3 +229,75 @@ export async function fetchAllMaterialsFromSupabase(subjectId) {
     return null;
   }
 }
+
+/**
+ * Fetches a single material from Supabase by ID
+ */
+export async function fetchSingleMaterialFromSupabase(materialId) {
+  if (!supabaseServer) return null;
+  try {
+    const { data: row, error } = await supabaseServer
+      .from('materials')
+      .select(`
+        *,
+        learn_content (*),
+        quizzes (*),
+        visuals (*),
+        topic_variants (*)
+      `)
+      .eq('id', materialId)
+      .single();
+
+    if (error || !row) return null;
+
+    const learnRow = Array.isArray(row.learn_content) ? row.learn_content[0] : row.learn_content;
+    const quizRow = Array.isArray(row.quizzes) ? row.quizzes[0] : row.quizzes;
+    const visualsRow = Array.isArray(row.visuals) ? row.visuals[0] : row.visuals;
+
+    const learnData = learnRow?.content_json || null;
+    const quizQuestions = quizRow?.questions_json || [];
+    const visualEpisodes = visualsRow?.visuals_json || [];
+
+    if (learnData && Array.isArray(learnData.topics) && Array.isArray(row.topic_variants)) {
+      row.topic_variants.forEach((v) => {
+        if (learnData.topics[v.topic_id]) {
+          learnData.topics[v.topic_id] = v.content_json;
+        }
+      });
+    }
+
+    return {
+      id: row.id,
+      subjectId: row.subject_id,
+      title: row.title,
+      chapterTitle: row.title,
+      originalFilename: row.file_name || row.title,
+      filePath: row.file_url || '',
+      fileType: row.file_type || 'pptx',
+      fileSize: Number(row.file_size) || 0,
+      totalPages: Number(row.total_pages) || 0,
+      uploadedAt: row.created_at,
+      lastOpenedAt: row.last_opened_at || row.created_at,
+      status: row.status || 'ready',
+      masteryScore: 0,
+      rawSlides: row.raw_slides_json || [],
+      learnData: learnData || undefined,
+      quizQuestions: quizQuestions.length > 0 ? quizQuestions : undefined,
+      visualEpisodes: visualEpisodes.length > 0 ? visualEpisodes : undefined,
+      learnStatus: learnData ? 'ready' : 'new',
+      quizStatus: quizQuestions.length > 0 ? 'ready' : 'new',
+      visualStatus: visualEpisodes.length > 0 ? 'ready' : 'new',
+      sections: [],
+      learnOverview: {
+        bigPicture: learnData?.big_idea || '',
+        roadmap: [],
+        quickRecap: learnData?.takeaways || [],
+        miniMemoryAids: [],
+      },
+      concepts: [],
+    };
+  } catch (err) {
+    console.warn('[Supabase fetchSingleMaterial Exception]', err);
+    return null;
+  }
+}
