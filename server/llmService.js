@@ -8,10 +8,10 @@ const SECRETS_FILE = path.join(DATA_DIR, 'secrets.json');
 
 // Preferred order of reliable fast models available on Google Generative Language API
 const GEMINI_MODELS = [
-  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
   'gemini-flash-lite-latest',
-  'gemini-3.5-flash',
-  'gemini-3.6-flash'
+  'gemini-3-flash-preview',
+  'gemini-3.5-flash-lite',
 ];
 
 // In-memory telemetry log buffer (last 50 generation calls)

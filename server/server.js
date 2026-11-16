@@ -541,82 +541,141 @@ app.get('/api/materials/:id', (req, res) => {
 app.post('/api/materials/:id/regenerate', async (req, res) => {
   try {
     const { tab } = req.body || {}; // 'learn' | 'quiz' | 'visual' | 'all'
-    const row = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Material not found' });
+    let row = null;
+    let materialTitle = '';
+    let rawSlides = [];
+    let subjectId = 'pm2';
+    let sections = [];
 
-    const rawSlides = JSON.parse(row.raw_slides_json || '[]');
-    const sections = JSON.parse(row.sections_json || '[]');
+    if (isSupabaseConfigured) {
+      try {
+        const supaMat = await fetchSingleMaterialFromSupabase(req.params.id);
+        if (supaMat) {
+          materialTitle = supaMat.title;
+          rawSlides = supaMat.rawSlides || [];
+          subjectId = supaMat.subjectId || 'pm2';
+          sections = supaMat.sections || [];
+        }
+      } catch (e) {
+        console.warn('[Regenerate Supabase lookup warning]', e.message);
+      }
+    }
+
+    if (!materialTitle) {
+      try {
+        row = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
+        if (row) {
+          materialTitle = row.chapter_title;
+          rawSlides = JSON.parse(row.raw_slides_json || '[]');
+          sections = JSON.parse(row.sections_json || '[]');
+          subjectId = row.subject_id;
+        }
+      } catch (_) {}
+    }
+
+    if (!materialTitle) return res.status(404).json({ error: 'Material not found' });
 
     if (tab === 'quiz') {
-      console.log(`[Regenerate] Regenerating strictly grounded quiz questions for "${row.chapter_title}"...`);
-      materialProgressMap.set(row.id, { phase: 'quiz', message: 'Formulating 12 grounded quiz questions...' });
-      const quizQuestions = await generateQuizQuestions(row.chapter_title, sections.length > 0 ? sections : groupSlidesIntoSections(rawSlides));
-      materialProgressMap.delete(row.id);
-      db.prepare(`UPDATE lessons SET quiz_questions_json = ?, quiz_status = 'ready' WHERE id = ?`).run(
-        JSON.stringify(quizQuestions),
-        row.id
-      );
+      console.log(`[Regenerate] Regenerating strictly grounded quiz questions for "${materialTitle}"...`);
+      materialProgressMap.set(req.params.id, { phase: 'quiz', message: 'Formulating grounded quiz questions...' });
+      const quizQuestions = await generateQuizQuestions(materialTitle, sections.length > 0 ? sections : groupSlidesIntoSections(rawSlides));
+      materialProgressMap.delete(req.params.id);
+      
+      try {
+        db.prepare(`UPDATE lessons SET quiz_questions_json = ?, quiz_status = 'ready' WHERE id = ?`).run(
+          JSON.stringify(quizQuestions),
+          req.params.id
+        );
+      } catch (_) {}
+
+      if (isSupabaseConfigured) {
+        await saveQuizToSupabase(req.params.id, quizQuestions);
+        const supaMat = await fetchSingleMaterialFromSupabase(req.params.id);
+        if (supaMat) return res.json(supaMat);
+      }
       const updatedRow = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
       return res.json(formatMaterialFromRow(updatedRow));
     }
 
     if (tab === 'visual') {
-      console.log(`[Regenerate] Regenerating visual episodes for "${row.chapter_title}"...`);
-      materialProgressMap.set(row.id, { phase: 'visual', message: 'Composing animated visual episodes...' });
-      const visualEpisodes = await generateVisualEpisodes(row.chapter_title, sections.length > 0 ? sections : groupSlidesIntoSections(rawSlides), row.subject_id);
-      materialProgressMap.delete(row.id);
-      db.prepare(`UPDATE lessons SET visual_episodes_json = ?, visual_status = 'ready' WHERE id = ?`).run(
-        JSON.stringify(visualEpisodes),
-        row.id
-      );
+      console.log(`[Regenerate] Regenerating visual episodes for "${materialTitle}"...`);
+      materialProgressMap.set(req.params.id, { phase: 'visual', message: 'Composing animated visual episodes...' });
+      const visualEpisodes = await generateVisualEpisodes(materialTitle, sections.length > 0 ? sections : groupSlidesIntoSections(rawSlides), subjectId);
+      materialProgressMap.delete(req.params.id);
+
+      try {
+        db.prepare(`UPDATE lessons SET visual_episodes_json = ?, visual_status = 'ready' WHERE id = ?`).run(
+          JSON.stringify(visualEpisodes),
+          req.params.id
+        );
+      } catch (_) {}
+
+      if (isSupabaseConfigured) {
+        await saveVisualsToSupabase(req.params.id, visualEpisodes);
+        const supaMat = await fetchSingleMaterialFromSupabase(req.params.id);
+        if (supaMat) return res.json(supaMat);
+      }
       const updatedRow = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
       return res.json(formatMaterialFromRow(updatedRow));
     }
 
-    console.log(`[Regenerate] Starting full real LLM generation for "${row.chapter_title}" (${rawSlides.length} slides)...`);
-    materialProgressMap.set(row.id, { phase: 'starting', current: 0, total: rawSlides.length, message: 'Starting generation...' });
-    db.prepare(`UPDATE lessons SET learn_status = 'processing', quiz_status = 'queued', visual_status = 'queued' WHERE id = ?`).run(row.id);
+    console.log(`[Regenerate] Starting full real LLM generation for "${materialTitle}" (${rawSlides.length} slides)...`);
+    materialProgressMap.set(req.params.id, { phase: 'starting', current: 0, total: rawSlides.length, message: 'Starting generation...' });
+    try {
+      db.prepare(`UPDATE lessons SET learn_status = 'processing', quiz_status = 'queued', visual_status = 'queued' WHERE id = ?`).run(req.params.id);
+    } catch (_) {}
 
     try {
-      const generated = await generateMaterialDataAsync(row.chapter_title, rawSlides, row.subject_id, (p) => {
-        materialProgressMap.set(row.id, p);
+      const generated = await generateMaterialDataAsync(materialTitle, rawSlides, subjectId, (p) => {
+        materialProgressMap.set(req.params.id, p);
         console.log(`[Regenerate Progress] ${p.message}`);
       });
-      materialProgressMap.delete(row.id);
+      materialProgressMap.delete(req.params.id);
 
-      db.prepare(`
-        UPDATE lessons SET
-          sections_json = ?,
-          learn_overview_json = ?,
-          quiz_questions_json = ?,
-          visual_episodes_json = ?,
-          learn_data_json = ?,
-          learn_status = 'ready',
-          quiz_status = 'ready',
-          visual_status = 'ready',
-          status = 'ready',
-          content_hash = ?
-        WHERE id = ?
-      `).run(
-        JSON.stringify(generated.sections),
-        JSON.stringify(generated.learnOverview),
-        JSON.stringify(generated.quizQuestions),
-        JSON.stringify(generated.visualEpisodes),
-        JSON.stringify(generated.learnData),
-        generated.contentHash,
-        row.id
-      );
+      try {
+        db.prepare(`
+          UPDATE lessons SET
+            sections_json = ?,
+            learn_overview_json = ?,
+            quiz_questions_json = ?,
+            visual_episodes_json = ?,
+            learn_data_json = ?,
+            learn_status = 'ready',
+            quiz_status = 'ready',
+            visual_status = 'ready',
+            status = 'ready',
+            content_hash = ?
+          WHERE id = ?
+        `).run(
+          JSON.stringify(generated.sections),
+          JSON.stringify(generated.learnOverview),
+          JSON.stringify(generated.quizQuestions),
+          JSON.stringify(generated.visualEpisodes),
+          JSON.stringify(generated.learnData),
+          generated.contentHash,
+          req.params.id
+        );
+      } catch (_) {}
+
+      if (isSupabaseConfigured) {
+        await saveLearnContentToSupabase(req.params.id, generated.learnData);
+        await saveQuizToSupabase(req.params.id, generated.quizQuestions);
+        await saveVisualsToSupabase(req.params.id, generated.visualEpisodes);
+        await upsertMaterialInSupabase({
+          id: req.params.id,
+          status: 'ready',
+        });
+        const supaMat = await fetchSingleMaterialFromSupabase(req.params.id);
+        if (supaMat) return res.json(supaMat);
+      }
 
       const updatedRow = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
-      if (isSupabaseConfigured) {
-        saveLearnContentToSupabase(row.id, generated.learnData);
-        saveQuizToSupabase(row.id, generated.quizQuestions);
-        saveVisualsToSupabase(row.id, generated.visualEpisodes);
-      }
       res.json(formatMaterialFromRow(updatedRow));
     } catch (genErr) {
-      materialProgressMap.delete(row.id);
-      db.prepare(`UPDATE lessons SET learn_status = 'failed' WHERE id = ?`).run(row.id);
+      materialProgressMap.delete(req.params.id);
+      try {
+        db.prepare(`UPDATE lessons SET learn_status = 'failed' WHERE id = ?`).run(req.params.id);
+      } catch (_) {}
       throw genErr;
     }
   } catch (err) {
@@ -1183,39 +1242,10 @@ app.post('/api/lessons/upload', upload.array('files'), async (req, res) => {
         now
       );
 
-      // Trigger background LLM generation with live progress reporting
-      generateMaterialDataAsync(chapterTitle, slides, subjectId, (progress) => {
-        materialProgressMap.set(lessonId, progress);
-      }).then((materialData) => {
-        materialProgressMap.delete(lessonId);
-        db.prepare(`
-          UPDATE lessons SET
-            sections_json = ?,
-            learn_overview_json = ?,
-            quiz_questions_json = ?,
-            visual_episodes_json = ?,
-            learn_data_json = ?,
-            learn_status = 'ready',
-            quiz_status = 'ready',
-            visual_status = 'ready',
-            status = 'ready',
-            content_hash = ?
-          WHERE id = ?
-        `).run(
-          JSON.stringify(materialData.sections),
-          JSON.stringify(materialData.learnOverview),
-          JSON.stringify(materialData.quizQuestions),
-          JSON.stringify(materialData.visualEpisodes),
-          JSON.stringify(materialData.learnData),
-          materialData.contentHash,
-          lessonId
-        );
-
-        if (isSupabaseConfigured) {
-          saveLearnContentToSupabase(lessonId, materialData.learnData);
-          saveQuizToSupabase(lessonId, materialData.quizQuestions);
-          saveVisualsToSupabase(lessonId, materialData.visualEpisodes);
-          upsertMaterialInSupabase({
+      // 1. Immediately save material row to Supabase
+      if (isSupabaseConfigured) {
+        try {
+          await upsertMaterialInSupabase({
             id: lessonId,
             subjectId,
             title: chapterTitle,
@@ -1227,51 +1257,50 @@ app.post('/api/lessons/upload', upload.array('files'), async (req, res) => {
             rawSlides: slides,
             status: 'ready',
           });
+        } catch (supaErr) {
+          console.warn('[Upload Supabase Save Notice]', supaErr.message);
+        }
+      }
+
+      // 2. Generate grounded study pages with Gemini
+      let generatedMaterialData = null;
+      try {
+        console.log(`[Upload] Generating grounded study pages for "${chapterTitle}"...`);
+        generatedMaterialData = await generateMaterialDataAsync(chapterTitle, slides, subjectId);
+        
+        if (isSupabaseConfigured && generatedMaterialData) {
+          await saveLearnContentToSupabase(lessonId, generatedMaterialData.learnData);
+          await saveQuizToSupabase(lessonId, generatedMaterialData.quizQuestions);
+          await saveVisualsToSupabase(lessonId, generatedMaterialData.visualEpisodes);
         }
 
-        console.log(`[Upload LLM Generation Complete] for ${lessonId}`);
-      }).catch((err) => {
-        materialProgressMap.delete(lessonId);
-        console.error(`[Upload LLM Generation Error] for ${lessonId}:`, err);
-        db.prepare(`
-          UPDATE lessons SET
-            learn_status = 'failed',
-            quiz_status = 'failed',
-            visual_status = 'failed',
-            status = 'failed'
-          WHERE id = ?
-        `).run(lessonId);
-      });
-
-      // Create legacy concepts for backward compatibility
-      try {
-        const concepts = generateBiteSizedConcepts(subjectId, lessonId, chapterTitle, slides);
-        const insertConcept = db.prepare(`
-          INSERT INTO concepts (id, lesson_id, subject_id, concept_order, title, one_sentence_summary, source_slide, status, plain_explanation, analogy, deep_explanation, key_terms_json, examples_json, quick_check_json, animation_json, quiz_questions_json)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        concepts.forEach((c) => {
-          insertConcept.run(
-            c.id,
-            lessonId,
-            subjectId,
-            c.conceptOrder,
-            c.title,
-            c.oneSentenceSummary,
-            c.sourceSlide,
-            c.status,
-            c.plainExplanation,
-            c.analogy,
-            c.deepExplanation,
-            JSON.stringify(c.keyTerms),
-            JSON.stringify(c.examples),
-            JSON.stringify(c.quickCheck),
-            JSON.stringify(c.animation),
-            JSON.stringify(c.quizQuestions)
+        try {
+          db.prepare(`
+            UPDATE lessons SET
+              sections_json = ?,
+              learn_overview_json = ?,
+              quiz_questions_json = ?,
+              visual_episodes_json = ?,
+              learn_data_json = ?,
+              learn_status = 'ready',
+              quiz_status = 'ready',
+              visual_status = 'ready',
+              status = 'ready',
+              content_hash = ?
+            WHERE id = ?
+          `).run(
+            JSON.stringify(generatedMaterialData.sections),
+            JSON.stringify(generatedMaterialData.learnOverview),
+            JSON.stringify(generatedMaterialData.quizQuestions),
+            JSON.stringify(generatedMaterialData.visualEpisodes),
+            JSON.stringify(generatedMaterialData.learnData),
+            generatedMaterialData.contentHash,
+            lessonId
           );
-        });
-      } catch (_) {}
+        } catch (_) {}
+      } catch (genErr) {
+        console.warn(`[Upload LLM Generation Notice] Deferred to Sprout:`, genErr.message);
+      }
 
       let formattedLesson = null;
       try {
@@ -1288,6 +1317,30 @@ app.post('/api/lessons/upload', upload.array('files'), async (req, res) => {
           title: chapterTitle,
           fileName: file.originalname,
           filePath: supabaseFileUrl || '',
+          fileType: ext,
+          fileSize: file.size,
+          totalPages: slides.length,
+          uploadedAt: now,
+          status: 'ready',
+          masteryScore: 0,
+          rawSlides: slides,
+          learnData: generatedMaterialData?.learnData || undefined,
+          quizQuestions: generatedMaterialData?.quizQuestions || [],
+          visualEpisodes: generatedMaterialData?.visualEpisodes || [],
+          quizAttempts: [],
+          learnStatus: generatedMaterialData?.learnData ? 'ready' : 'empty',
+          quizStatus: (generatedMaterialData?.quizQuestions?.length || 0) > 0 ? 'ready' : 'empty',
+          visualStatus: (generatedMaterialData?.visualEpisodes?.length || 0) > 0 ? 'ready' : 'empty',
+          sections: generatedMaterialData?.sections || [],
+          learnOverview: generatedMaterialData?.learnOverview || {
+            bigPicture: `Synthesizing grounded lecture overview for ${chapterTitle}...`,
+            roadmap: [],
+            quickRecap: [`Reading ${slides.length} slides from ${file.originalname}...`],
+            miniMemoryAids: [],
+          },
+          concepts: [],
+        };
+      }
           fileType: ext,
           fileSize: file.size,
           totalPages: slides.length,
