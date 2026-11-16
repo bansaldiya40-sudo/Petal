@@ -122,7 +122,7 @@ export const LearnTab: React.FC<LearnTabProps> = ({
     }
 
     try {
-      const res = await adjustTopicLevel(material.id, idx, mode);
+      const res = await adjustTopicLevel(material.id, idx, mode, rawTopic, material.rawSlides);
       if (res.topic) {
         setTopicOverrides((prev) => ({
           ...prev,

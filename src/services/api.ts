@@ -104,13 +104,15 @@ export async function regenerateSection(id: string, sectionId: string): Promise<
 export async function adjustTopicLevel(
   materialId: string,
   topicIndex: number,
-  mode: 'simplify' | 'deeper'
-): Promise<{ success: boolean; topic: LearnTopic; material: Material }> {
+  mode: 'simplify' | 'deeper',
+  currentTopic?: LearnTopic,
+  rawSlides?: any[]
+): Promise<{ success: boolean; topic: LearnTopic; material?: Material }> {
   const doRequest = async () => {
     const res = await fetch(`/api/materials/${materialId}/topics/${topicIndex}/adjust`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode }),
+      body: JSON.stringify({ mode, currentTopic, rawSlides }),
     });
     if (!res.ok) {
       if (res.status === 429 || res.status >= 500) {

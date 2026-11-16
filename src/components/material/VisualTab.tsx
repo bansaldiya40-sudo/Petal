@@ -251,7 +251,8 @@ const SingleVisualCard: React.FC<SingleVisualCardProps> = ({
   return (
     <div
       ref={cardRef}
-      className="p-5 sm:p-6 rounded-[28px] bg-[#FFFDF9] border-2 border-[#EADBBF] hover:border-[#D4A373] shadow-storybook transition-all flex flex-col justify-between space-y-4"
+      onClick={() => onOpenPlayer(index)}
+      className="group p-5 sm:p-6 rounded-[28px] bg-[#FFFDF9] border-2 border-[#EADBBF] hover:border-[#D4A373] hover:shadow-storybook-hover shadow-storybook transition-all flex flex-col justify-between space-y-4 cursor-pointer"
     >
       {/* Top Header */}
       <div className="flex items-start justify-between gap-3">
@@ -265,28 +266,22 @@ const SingleVisualCard: React.FC<SingleVisualCardProps> = ({
             </span>
           </div>
 
-          <h4 className="font-display font-bold text-[18px] sm:text-[19px] text-[#3B2252] leading-snug">
+          <h4 className="font-display font-bold text-[18px] sm:text-[19px] text-[#3B2252] leading-snug group-hover:text-[#6C3FE0] transition-colors">
             {episode.sectionTitle || episode.title}
           </h4>
         </div>
 
         {/* Action icons */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenPlayer(index);
-            }}
+            onClick={() => onOpenPlayer(index)}
             className="w-9 h-9 rounded-full bg-[#FAF5FF] hover:bg-[#EBE0F8] border border-[#D8C7F5] flex items-center justify-center text-[#6C3FE0] transition-colors shadow-2xs"
             title="Open in Storyboard Director Player"
           >
             <Maximize2 className="w-4 h-4" />
           </button>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onRegenerate(episode.id);
-            }}
+            onClick={() => onRegenerate(episode.id)}
             disabled={isRegenerating}
             className="w-9 h-9 rounded-full bg-[#FFF5E4] hover:bg-[#EFE2CC] border border-[#EADBBF] flex items-center justify-center text-[#855627] transition-colors shadow-2xs disabled:opacity-50"
             title="Regenerate this visual"
@@ -296,7 +291,7 @@ const SingleVisualCard: React.FC<SingleVisualCardProps> = ({
         </div>
       </div>
 
-      {/* Sandboxed Interactive Animated Iframe */}
+      {/* Sandboxed Interactive Animated Iframe Preview */}
       <div className="relative w-full h-[260px] sm:h-[280px] rounded-2xl overflow-hidden border-2 border-[#EADBBF] bg-white shadow-inner">
         {isRegenerating && (
           <div className="absolute inset-0 z-20 bg-white/80 backdrop-blur-xs flex flex-col items-center justify-center gap-2 text-xs font-display font-bold text-[#6C3FE0]">
@@ -311,52 +306,39 @@ const SingleVisualCard: React.FC<SingleVisualCardProps> = ({
           sandbox="allow-scripts"
           title={`Animated Visual: ${episode.sectionTitle}`}
           onLoad={() => setIsIframeLoaded(true)}
-          className="w-full h-full border-0 pointer-events-auto"
+          className="w-full h-full border-0 pointer-events-none"
         />
 
-        {/* Visible Play / Pause / Replay Toolbar overlay */}
-        <div className="absolute bottom-2.5 right-2.5 z-10 flex items-center gap-1.5 bg-[#FFFDF9]/95 backdrop-blur-xs p-1 px-2 rounded-xl border border-[#EADBBF] shadow-sm">
-          <button
-            onClick={togglePlay}
-            className="p-1 rounded-lg hover:bg-[#F3ECFB] text-[#6C3FE0] transition-colors flex items-center gap-1 text-[11px] font-display font-bold"
-            title={isPlaying ? 'Pause animation' : 'Play animation'}
-          >
-            {isPlaying ? (
-              <>
-                <Pause className="w-3.5 h-3.5 fill-[#6C3FE0]" />
-                <span>Pause</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-3.5 h-3.5 fill-[#6C3FE0]" />
-                <span>Play</span>
-              </>
-            )}
-          </button>
-
-          <span className="w-px h-3 bg-[#EADBBF]" />
-
-          <button
-            onClick={handleReplay}
-            className="p-1 rounded-lg hover:bg-[#FAF5FF] text-[#855627] transition-colors flex items-center gap-1 text-[11px] font-display font-bold"
-            title="Replay from start"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Replay</span>
-          </button>
+        {/* Hover Click-to-Play Overlay */}
+        <div className="absolute inset-0 bg-[#3B2252]/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+          <div className="px-4 py-2 rounded-full bg-white/95 border-2 border-[#B196F5] shadow-md flex items-center gap-2 text-[#4A3566] text-xs font-display font-bold transform group-hover:scale-105 transition-transform">
+            <Play className="w-3.5 h-3.5 fill-[#4A3566]" />
+            <span>Click to Watch Episode {episode.episodeNumber}</span>
+          </div>
         </div>
       </div>
 
-      {/* Episode Metadata & Story Hook */}
-      <div className="space-y-2 text-xs font-body text-[#6C538C] pt-1">
-        <p className="line-clamp-2 leading-relaxed">
+      {/* Episode Metadata & Watch Button */}
+      <div className="space-y-3 pt-1 border-t border-[#F2E8D8]">
+        <p className="text-xs font-body text-[#6C538C] line-clamp-2 leading-relaxed">
           {episode.narration}
         </p>
-        <div className="flex items-center justify-between text-[11px] font-display font-bold text-[#855627] border-t border-[#F2E8D8] pt-2">
-          <span>🏷️ {episode.takeawayProp || episode.slidesRange}</span>
-          <span className="flex items-center gap-1 font-mono">
+
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenPlayer(index);
+            }}
+            className="btn-storybook min-h-[42px] px-5 bg-gradient-to-r from-[#D9C8FF] via-[#FFD6E0] to-[#FFF0B8] border-2 border-[#B196F5] text-[#4A3566] text-xs font-display font-bold shadow-xs hover:scale-103 transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <Play className="w-3.5 h-3.5 fill-[#4A3566]" />
+            <span>Watch Episode {episode.episodeNumber} ({episode.durationSeconds || 24}s)</span>
+          </button>
+
+          <span className="text-[11px] font-mono text-[#855627] bg-[#FFF5E4] px-2.5 py-1.5 rounded-xl border border-[#EADBBF] flex items-center gap-1">
             <Clock className="w-3 h-3 text-[#855627]" />
-            {episode.durationSeconds || 24}s
+            <span>{episode.durationSeconds || 24}s</span>
           </span>
         </div>
       </div>

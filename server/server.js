@@ -629,36 +629,73 @@ app.post('/api/materials/:id/regenerate', async (req, res) => {
 app.post('/api/materials/:id/topics/:topicIndex/adjust', async (req, res) => {
   try {
     const { id, topicIndex } = req.params;
-    const { mode } = req.body || {}; // 'simplify' | 'deeper'
+    const { mode, currentTopic: bodyTopic, rawSlides: bodySlides } = req.body || {}; // 'simplify' | 'deeper'
     const idx = parseInt(topicIndex, 10);
-    const row = db.prepare('SELECT * FROM lessons WHERE id = ?').get(id);
-    if (!row) return res.status(404).json({ error: 'Material not found' });
 
-    let learnData = row.learn_data_json ? JSON.parse(row.learn_data_json) : null;
-    if (!learnData || !learnData.topics || !learnData.topics[idx]) {
-      return res.status(400).json({ error: 'Topic not found in material' });
+    let targetTopic = bodyTopic || null;
+    let slides = Array.isArray(bodySlides) && bodySlides.length > 0 ? bodySlides : [];
+    let learnData = null;
+
+    // 1. If topic not provided in body, check Supabase
+    if (!targetTopic && isSupabaseConfigured) {
+      try {
+        const supaMat = await fetchSingleMaterialFromSupabase(id);
+        if (supaMat && supaMat.learnData && supaMat.learnData.topics && supaMat.learnData.topics[idx]) {
+          learnData = supaMat.learnData;
+          targetTopic = learnData.topics[idx];
+          slides = supaMat.rawSlides || slides;
+        }
+      } catch (supaErr) {
+        console.warn('[Adjust Topic Supabase lookup]', supaErr.message);
+      }
     }
 
-    const rawSlides = JSON.parse(row.raw_slides_json || '[]');
-    const currentTopic = learnData.topics[idx];
-    console.log(`[Adjust Topic] Adjusting topic ${idx} ("${currentTopic.title}") with mode "${mode}"...`);
+    // 2. If still not found, check SQLite
+    if (!targetTopic) {
+      try {
+        const row = db.prepare('SELECT * FROM lessons WHERE id = ?').get(id);
+        if (row) {
+          learnData = row.learn_data_json ? JSON.parse(row.learn_data_json) : null;
+          if (learnData && learnData.topics && learnData.topics[idx]) {
+            targetTopic = learnData.topics[idx];
+            slides = JSON.parse(row.raw_slides_json || '[]');
+          }
+        }
+      } catch (_) {}
+    }
 
-    const updatedTopic = await adjustSingleTopic(currentTopic, rawSlides, mode);
-    learnData.topics[idx] = updatedTopic;
+    if (!targetTopic) {
+      return res.status(404).json({ error: 'Topic not found in material' });
+    }
 
-    // Persist updated learn_data_json to DB
-    db.prepare('UPDATE lessons SET learn_data_json = ? WHERE id = ?').run(
-      JSON.stringify(learnData),
-      id
-    );
+    console.log(`[Adjust Topic] Adjusting topic ${idx} ("${targetTopic.title}") with mode "${mode}"...`);
 
+    const updatedTopic = await adjustSingleTopic(targetTopic, slides, mode);
+
+    // Save topic variant to Supabase
     if (isSupabaseConfigured) {
-      saveTopicVariantToSupabase(id, idx, mode, updatedTopic);
-      saveLearnContentToSupabase(id, learnData);
+      try {
+        await saveTopicVariantToSupabase(id, idx, mode, updatedTopic);
+        if (learnData && Array.isArray(learnData.topics)) {
+          learnData.topics[idx] = updatedTopic;
+          await saveLearnContentToSupabase(id, learnData);
+        }
+      } catch (saveErr) {
+        console.warn('[Adjust Topic Supabase save warning]', saveErr.message);
+      }
     }
 
-    const updatedRow = db.prepare('SELECT * FROM lessons WHERE id = ?').get(id);
-    return res.json({ success: true, topic: updatedTopic, material: formatMaterialFromRow(updatedRow) });
+    // Update SQLite if available
+    try {
+      if (learnData) {
+        db.prepare('UPDATE lessons SET learn_data_json = ? WHERE id = ?').run(
+          JSON.stringify(learnData),
+          id
+        );
+      }
+    } catch (_) {}
+
+    return res.json({ success: true, topic: updatedTopic });
   } catch (err) {
     console.error('[Adjust Topic Error]', err);
     res.status(500).json({ error: err.message });
