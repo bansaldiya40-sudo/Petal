@@ -2,7 +2,12 @@ import React, { useState } from 'react';
 import { SubjectId, Lesson } from '../../types';
 import { getCustomSubjects, saveCustomSubject } from '../../utils/subjects';
 import { ParallaxGardenLandscape } from '../illustrations/ParallaxGardenLandscape';
-import { LavenderFairyTower, MintTreehouseLibrary, GoldenHoneyMarketStall } from '../illustrations/Landmarks';
+import {
+  LavenderFairyTower,
+  MintTreehouseLibrary,
+  GoldenHoneyMarketStall,
+  EnchantedSanctuaryLandmark,
+} from '../illustrations/Landmarks';
 import { ScrollOfTheDay } from '../home/ScrollOfTheDay';
 import { PetalLogo, PetalFlowerMark } from '../brand/PetalLogo';
 import { Sparkles, ArrowRight, BookOpen, Compass, Plus, X, GraduationCap } from 'lucide-react';
@@ -161,9 +166,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
 
         {/* ======================================================== */}
-        {/* 2. DESKTOP VIEW (md+): Winding Path with 3 Big Landmarks */}
+        {/* 2. DESKTOP VIEW (md+): Winding Path with Animated Landmarks */}
         {/* ======================================================== */}
-        <div className="hidden md:block relative w-full max-w-6xl mx-auto my-1 min-h-[480px] h-[500px] lg:h-[520px] shrink-0">
+        <div
+          className={`hidden md:block relative w-full max-w-6xl mx-auto my-1 shrink-0 transition-all duration-500 ${
+            customList.length === 0
+              ? 'min-h-[480px] h-[500px] lg:h-[520px]'
+              : customList.length <= 2
+              ? 'min-h-[780px] h-[820px] lg:h-[840px]'
+              : 'min-h-[1100px] h-[1150px]'
+          }`}
+        >
           {/* LANDMARK 1: Product Management 2 */}
           <div
             onClick={() => onSelectSubject('pm2')}
@@ -235,46 +248,68 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Custom Extra Subjects Ribbon (Desktop & Mobile) */}
-        {customList.length > 0 && (
-          <div className="w-full max-w-6xl mx-auto my-4 z-20">
-            <h4 className="text-[18px] font-display font-bold text-[#4B2A7B] mb-3 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#FF5FA2]" />
-              <span>Your Custom Sanctuaries ({customList.length})</span>
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {customList.map((sub) => {
-                const stats = getSubjectStats(sub.id);
-                return (
+          {/* DYNAMIC STORYBOOK LANDMARKS: Custom Subjects (e.g. Leadership Accelerator) */}
+          {customList.map((sub, idx) => {
+            const stats = getSubjectStats(sub.id);
+            const posClass =
+              idx === 0
+                ? 'top-[44%] left-[2%] lg:left-[4%]'
+                : idx === 1
+                ? 'top-[44%] right-[2%] lg:right-[4%]'
+                : idx === 2
+                ? 'top-[68%] left-[30%] lg:left-[33%]'
+                : idx % 2 === 1
+                ? 'top-[86%] left-[2%] lg:left-[4%]'
+                : 'top-[86%] right-[2%] lg:right-[4%]';
+
+            const gradientFrom = sub.accentHex || (idx % 2 === 0 ? '#E056FD' : '#686DE0');
+            const gradientTo = '#4B2A7B';
+
+            return (
+              <div
+                key={sub.id}
+                onClick={() => onSelectSubject(sub.id)}
+                onMouseEnter={() => setHoveredLandmark(sub.id)}
+                onMouseLeave={() => setHoveredLandmark(null)}
+                className={`absolute ${posClass} cursor-pointer group z-20 transition-all duration-300`}
+              >
+                <div className="relative flex flex-col items-center">
+                  <div className="w-64 lg:w-72 transition-transform duration-300 group-hover:scale-105">
+                    <EnchantedSanctuaryLandmark
+                      size={260}
+                      isHovered={hoveredLandmark === sub.id}
+                      subjectTitle={sub.title}
+                      accentColor={sub.accentHex || '#9B51E0'}
+                      characterName={sub.characterName || 'Flora'}
+                    />
+                  </div>
+
+                  {/* Saturated Wooden/Ribbon Signpost */}
                   <div
-                    key={sub.id}
-                    onClick={() => onSelectSubject(sub.id)}
-                    className="p-5 rounded-organic-md bg-[#FFF9F0] border-2 border-[#855627] hover:border-[#9670F5] shadow-storybook hover:shadow-storybook-hover cursor-pointer transition-all hover:scale-[1.02] flex items-center justify-between"
+                    style={{
+                      background: `linear-gradient(to right, ${gradientFrom}, ${gradientTo})`,
+                    }}
+                    className="mt-[-24px] px-5 py-2 rounded-2xl border-[2.5px] border-[#4B2A7B] shadow-[0_5px_0_#4B2A7B,0_10px_20px_rgba(75,42,123,0.2)] flex items-center gap-2.5 group-hover:scale-105 group-hover:shadow-[0_7px_0_#4B2A7B] transition-all"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-[#E7DCFF] border border-[#B196F5] flex items-center justify-center text-2xl">
-                        🏛️
-                      </div>
-                      <div>
-                        <h5 className="font-brand font-bold text-[19px] text-[#4B2A7B]">
-                          {sub.title}
-                        </h5>
-                        <p className="text-xs text-[#855627] font-display">
-                          {sub.code} • {sub.characterName}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-xs font-display font-bold px-3 py-1 rounded-full bg-white text-[#4B2A7B] border border-[#855627]">
-                      {stats.lessonCount} Deck{stats.lessonCount !== 1 ? 's' : ''}
+                    <span className="w-3.5 h-3.5 rounded-full bg-[#FFF0B8] border border-[#4B2A7B] shrink-0" />
+                    <span className="text-[20px] lg:text-[22px] font-brand font-black text-white tracking-wide whitespace-nowrap drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]">
+                      {sub.title}
+                    </span>
+                    <span className="text-[12px] font-display font-black px-2.5 py-0.5 rounded-full bg-white text-[#4B2A7B] border-2 border-[#4B2A7B] shadow-xs flex items-center gap-1 shrink-0">
+                      <span>🌸</span>
+                      <span>
+                        {stats.lessonCount === 0
+                          ? 'Plant seed'
+                          : `${stats.bloomedConcepts} / ${stats.totalConcepts} bloomed`}
+                      </span>
                     </span>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
         {/* ======================================================== */}
         {/* 3. MOBILE VIEW (< md): Vertical Storybook Trail          */}
@@ -330,6 +365,43 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </span>
             </div>
           </div>
+
+          {/* DYNAMIC CUSTOM SANCTUARIES: Mobile Storybook Trail */}
+          {customList.map((sub, idx) => {
+            const stats = getSubjectStats(sub.id);
+            const gradientFrom = sub.accentHex || (idx % 2 === 0 ? '#E056FD' : '#686DE0');
+            const gradientTo = '#4B2A7B';
+
+            return (
+              <div
+                key={sub.id}
+                onClick={() => onSelectSubject(sub.id)}
+                className="flex flex-col items-center cursor-pointer group active:scale-95 transition-transform"
+              >
+                <div className="w-72 max-w-[320px]">
+                  <EnchantedSanctuaryLandmark
+                    subjectTitle={sub.title}
+                    accentColor={sub.accentHex || '#9B51E0'}
+                    characterName={sub.characterName || 'Flora'}
+                  />
+                </div>
+                <div
+                  style={{
+                    background: `linear-gradient(to right, ${gradientFrom}, ${gradientTo})`,
+                  }}
+                  className="mt-[-20px] px-5 py-2.5 rounded-2xl border-[2.5px] border-[#4B2A7B] shadow-[0_4px_0_#4B2A7B] flex items-center gap-2.5"
+                >
+                  <span className="w-3 h-3 rounded-full bg-[#FFF0B8] border border-[#4B2A7B]" />
+                  <span className="text-[20px] font-brand font-black text-white">{sub.title}</span>
+                  <span className="text-[12px] font-display font-black px-2.5 py-0.5 rounded-full bg-white text-[#4B2A7B] border border-[#4B2A7B]">
+                    {stats.lessonCount === 0
+                      ? 'Plant seed'
+                      : `${stats.bloomedConcepts}/${stats.totalConcepts}`}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {/* Modal: Add New Subject Sanctuary */}

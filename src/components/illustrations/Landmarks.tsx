@@ -496,3 +496,226 @@ export const GoldenHoneyMarketStall: React.FC<LandmarkProps> = ({ className = ''
     </svg>
   );
 };
+
+export interface EnchantedSanctuaryLandmarkProps extends LandmarkProps {
+  subjectTitle?: string;
+  accentColor?: string;
+  characterName?: string;
+}
+
+/**
+ * Dynamic Storybook Landmark for Custom Subjects (e.g., Leadership Accelerator, Corporate Finance)
+ * An enchanted storybook academy & conservatory spire with glowing bay windows,
+ * chimney smoke, climbing blossoms, and Flora the wise scholar guide.
+ */
+export const EnchantedSanctuaryLandmark: React.FC<EnchantedSanctuaryLandmarkProps> = ({
+  className = '',
+  size = 280,
+  isHovered = false,
+  subjectTitle = 'Sanctuary',
+  accentColor = '#9B51E0',
+  characterName = 'Flora',
+}) => {
+  const roofColor = accentColor || '#9B51E0';
+  const glowColor = accentColor || '#B196F5';
+
+  return (
+    <svg
+      viewBox="0 0 280 340"
+      width={size}
+      height={size * 1.21}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={`select-none transition-all duration-300 ${className} ${
+        isHovered
+          ? 'scale-105 filter drop-shadow-[0_16px_32px_rgba(155,81,224,0.6)]'
+          : 'filter drop-shadow-[0_10px_20px_rgba(75,42,123,0.18)]'
+      }`}
+      aria-label={`Enchanted Storybook Sanctuary of ${subjectTitle}`}
+    >
+      <defs>
+        {/* Stone Masonry Wall */}
+        <linearGradient id="sanctuaryWall" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#FFFDF9" />
+          <stop offset="50%" stopColor="#F5EFE6" />
+          <stop offset="100%" stopColor="#EADECF" />
+        </linearGradient>
+
+        {/* Steeple & Dormer Roof */}
+        <linearGradient id="sanctuaryRoof" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#FFE0EB" />
+          <stop offset="40%" stopColor={roofColor} />
+          <stop offset="100%" stopColor="#4B2A7B" />
+        </linearGradient>
+
+        {/* Warm Bay Window Glow */}
+        <radialGradient id="sanctuaryWindowGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#FFFDF0" />
+          <stop offset="60%" stopColor="#FFE58F" />
+          <stop offset="100%" stopColor="#FFC93C" stopOpacity="0.5" />
+        </radialGradient>
+      </defs>
+
+      {/* Ambient soft glow on hover */}
+      <circle
+        cx="140"
+        cy="180"
+        r="110"
+        fill={glowColor}
+        opacity={isHovered ? 0.45 : 0.2}
+        className="transition-opacity duration-300"
+      />
+
+      {/* Hillock / Floral Moss Mound */}
+      <path
+        d="M40 310 C75 285, 205 285, 240 310 C250 325, 30 325, 40 310 Z"
+        fill="#CFF2E0"
+        stroke="#83D9A7"
+        strokeWidth="3"
+      />
+      {/* Stone Pathway Pavers */}
+      <ellipse cx="140" cy="316" rx="22" ry="5.5" fill="#DFC29D" stroke="#855627" strokeWidth="2" />
+      <ellipse cx="140" cy="307" rx="17" ry="4.5" fill="#EAD7BA" stroke="#855627" strokeWidth="1.8" />
+      <circle cx="65" cy="312" r="3.5" fill="#FFFFFF" />
+      <circle cx="65" cy="312" r="1.5" fill="#FFC93C" />
+      <circle cx="215" cy="312" r="3.5" fill="#FFFFFF" />
+      <circle cx="215" cy="312" r="1.5" fill="#FF5FA2" />
+
+      {/* Main Academy Building Body */}
+      <rect
+        x="80"
+        y="160"
+        width="120"
+        height="140"
+        rx="12"
+        fill="url(#sanctuaryWall)"
+        stroke="#4B2A7B"
+        strokeWidth="3.5"
+      />
+
+      {/* Stone Bricks Detailing */}
+      <path d="M92 185 Q102 183 112 185" stroke="#B8A793" strokeWidth="2" strokeLinecap="round" />
+      <path d="M168 195 Q178 193 188 195" stroke="#B8A793" strokeWidth="2" strokeLinecap="round" />
+      <path d="M96 230 Q106 228 116 230" stroke="#B8A793" strokeWidth="2" strokeLinecap="round" />
+      <path d="M162 250 Q172 248 182 250" stroke="#B8A793" strokeWidth="2" strokeLinecap="round" />
+
+      {/* Chimney with Smoke */}
+      <g>
+        <rect x="172" y="80" width="22" height="45" rx="3" fill="#EADECF" stroke="#4B2A7B" strokeWidth="2.8" />
+        <rect x="168" y="76" width="30" height="7" rx="2" fill="#B88652" stroke="#4B2A7B" strokeWidth="2" />
+        {/* Soft Smoke Puffs */}
+        <circle cx="183" cy="65" r="5" fill="#FFFFFF" opacity="0.85" className="animate-smoke" />
+        <circle cx="187" cy="54" r="7" fill="#FFEAA0" opacity="0.75" className="animate-smoke-delay" />
+      </g>
+
+      {/* Stepped Mansard / Spire Roof */}
+      <path
+        d="M65 165 L140 70 L215 165 Z"
+        fill="url(#sanctuaryRoof)"
+        stroke="#4B2A7B"
+        strokeWidth="3.5"
+        strokeLinejoin="round"
+      />
+
+      {/* Spire Peak Ornament / Golden Star Weather Vane */}
+      <line x1="140" y1="70" x2="140" y2="40" stroke="#4B2A7B" strokeWidth="3" strokeLinecap="round" />
+      <polygon
+        points="140,28 144,38 154,40 146,47 148,57 140,51 132,57 134,47 126,40 136,38"
+        fill="#FFC93C"
+        stroke="#4B2A7B"
+        strokeWidth="1.8"
+        className={isHovered ? 'animate-spin' : ''}
+        style={{ transformOrigin: '140px 42px' }}
+      />
+
+      {/* Fluttering Crest Banner */}
+      <g>
+        <path
+          d="M140 46 Q165 40 175 48 L170 60 Q155 54 140 58 Z"
+          fill={roofColor}
+          stroke="#4B2A7B"
+          strokeWidth="1.8"
+        />
+        <circle cx="158" cy="51" r="2" fill="#FFFFFF" />
+      </g>
+
+      {/* Climbing Rose Ivy Vine */}
+      <path
+        d="M82 295 Q68 250 82 215 T74 175"
+        stroke="#83D9A7"
+        strokeWidth="3.2"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <circle cx="72" cy="270" r="4.5" fill="#FF5FA2" stroke="#4B2A7B" strokeWidth="1.5" />
+      <circle cx="82" cy="235" r="4" fill="#FFC93C" stroke="#4B2A7B" strokeWidth="1.5" />
+      <circle cx="72" cy="195" r="4.5" fill="#FF5FA2" stroke="#4B2A7B" strokeWidth="1.5" />
+
+      {/* Suspended Brass Fairy Lantern on left */}
+      <g className="animate-sway" style={{ transformOrigin: '76px 175px' }}>
+        <line x1="76" y1="175" x2="76" y2="195" stroke="#855627" strokeWidth="2" />
+        <rect x="69" y="195" width="14" height="18" rx="3" fill="#FFF0B8" stroke="#855627" strokeWidth="2" />
+        <circle cx="76" cy="204" r="3" fill="#FFC93C" />
+      </g>
+
+      {/* Arched Double Wooden Sanctuary Doors */}
+      <path
+        d="M120 300 L120 245 C120 232, 160 232, 160 245 L160 300 Z"
+        fill="#DFC29D"
+        stroke="#855627"
+        strokeWidth="3"
+      />
+      <line x1="140" y1="234" x2="140" y2="300" stroke="#855627" strokeWidth="2" />
+      <circle cx="134" cy="270" r="2.5" fill="#FFF0B8" stroke="#855627" strokeWidth="1.5" />
+      <circle cx="146" cy="270" r="2.5" fill="#FFF0B8" stroke="#855627" strokeWidth="1.5" />
+
+      {/* Upper Glowing Bay Balcony Window */}
+      <path
+        d="M110 190 L110 145 C110 130, 170 130, 170 145 L170 190 Z"
+        fill="url(#sanctuaryWindowGlow)"
+        stroke="#4B2A7B"
+        strokeWidth="3"
+      />
+      <line x1="140" y1="132" x2="140" y2="190" stroke="#4B2A7B" strokeWidth="2" />
+      <line x1="110" y1="165" x2="170" y2="165" stroke="#4B2A7B" strokeWidth="2" />
+      {/* Balcony Railing */}
+      <rect x="104" y="186" width="72" height="10" rx="3" fill="#B88652" stroke="#4B2A7B" strokeWidth="2.5" />
+      {[112, 126, 140, 154, 168].map((x) => (
+        <line key={x} x1={x} y1="188" x2={x} y2="196" stroke="#4B2A7B" strokeWidth="2" />
+      ))}
+
+      {/* Flora The Scholar Guide / Mascot waving from the window */}
+      <g
+        className={isHovered ? 'animate-bounce' : 'animate-fairy-loop'}
+        style={{ transformOrigin: '140px 155px' }}
+      >
+        {/* Scholar Guide Body */}
+        <ellipse cx="140" cy="162" rx="14" ry="12" fill="#FFFDF0" stroke="#4B2A7B" strokeWidth="2" />
+        {/* Head */}
+        <circle cx="140" cy="144" r="11" fill="#FFFDF0" stroke="#4B2A7B" strokeWidth="2" />
+        {/* Rosy Cheeks */}
+        <circle cx="134" cy="148" r="2.2" fill="#FFD6E0" />
+        <circle cx="146" cy="148" r="2.2" fill="#FFD6E0" />
+        {/* Scholarly Glasses */}
+        <circle cx="136" cy="144" r="3.5" fill="none" stroke="#4B2A7B" strokeWidth="1.5" />
+        <circle cx="144" cy="144" r="3.5" fill="none" stroke="#4B2A7B" strokeWidth="1.5" />
+        <line x1="139.5" y1="144" x2="140.5" y2="144" stroke="#4B2A7B" strokeWidth="1.5" />
+        {/* Eyes behind glasses */}
+        <circle cx="136" cy="144" r="1.3" fill="#4B2A7B" />
+        <circle cx="144" cy="144" r="1.3" fill="#4B2A7B" />
+        {/* Happy smile */}
+        <path d="M138 150 Q140 152 142 150" stroke="#4B2A7B" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+
+        {/* Graduation / Wizard Cap */}
+        <polygon points="140,132 154,136 140,140 126,136" fill={roofColor} stroke="#4B2A7B" strokeWidth="1.8" />
+        <rect x="135" y="138" width="10" height="4" fill="#4B2A7B" />
+        {/* Golden Cap Tassel */}
+        <line x1="140" y1="136" x2="152" y2="142" stroke="#FFC93C" strokeWidth="1.5" />
+        <circle cx="152" cy="142" r="1.5" fill="#FFC93C" />
+
+        {/* Waving Paw / Hand */}
+        <circle cx="156" cy="154" r="3.5" fill="#FFFDF0" stroke="#4B2A7B" strokeWidth="1.5" />
+      </g>
+    </svg>
+  );
+};
