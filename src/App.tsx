@@ -97,9 +97,20 @@ export function App() {
     }
   };
 
-  const handleLessonCreated = async () => {
+  const handleLessonCreated = async (newLessons?: Lesson[]) => {
+    // 1. Optimistic instant UI update
+    if (newLessons && newLessons.length > 0) {
+      setLessons((prev) => {
+        const existingIds = new Set(prev.map((l) => l.id));
+        const additions = newLessons.filter((l) => !existingIds.has(l.id));
+        return [...additions, ...prev];
+      });
+    }
+    // 2. Sync with cloud Supabase
     const updated = await fetchLessons();
-    setLessons(updated);
+    if (updated && updated.length > 0) {
+      setLessons(updated);
+    }
     triggerPetalsCelebration();
   };
 

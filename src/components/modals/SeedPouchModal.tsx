@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { SubjectId, Lesson } from '../../types';
 import { SUBJECTS } from '../../utils/subjects';
-import { uploadMaterials } from '../../services/api';
+import { uploadMaterials, uploadTextNotes } from '../../services/api';
 import { PetalFlowerMark } from '../brand/PetalLogo';
-import { Flower2, Sparkles, X, AlertCircle, Check, FileText } from 'lucide-react';
+import { Flower2, Sparkles, X, AlertCircle, Check, FileText, UploadCloud, Edit3 } from 'lucide-react';
 
 interface SeedPouchModalProps {
   subjectId: SubjectId;
@@ -26,10 +26,13 @@ export const SeedPouchModal: React.FC<SeedPouchModalProps> = ({
   onClose,
   onUploadComplete,
 }) => {
+  const [tabMode, setTabMode] = useState<'upload' | 'paste'>('upload');
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
+  const [notesTitle, setNotesTitle] = useState('');
+  const [notesContent, setNotesContent] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -87,6 +90,22 @@ export const SeedPouchModal: React.FC<SeedPouchModalProps> = ({
     }
   };
 
+  const handlePasteSubmit = async () => {
+    if (!notesContent.trim()) return;
+    setErrorMessage(null);
+    setIsProcessing(true);
+    try {
+      const lesson = await uploadTextNotes(notesTitle || 'Lecture Notes', notesContent, subjectId);
+      setIsProcessing(false);
+      onUploadComplete([lesson]);
+      onClose();
+    } catch (err: any) {
+      console.error('Notes planting error', err);
+      setIsProcessing(false);
+      setErrorMessage(err.message || 'Could not plant notes seed.');
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#4A3566]/35 backdrop-blur-md animate-fadeIn">
       {/* Seed Pouch Shape Container */}
@@ -108,20 +127,48 @@ export const SeedPouchModal: React.FC<SeedPouchModalProps> = ({
         </button>
 
         {/* Header */}
-        <div className="pt-2 mb-6">
+        <div className="pt-2 mb-4">
           <div className="flex items-center gap-3 mb-2">
             <PetalFlowerMark size={32} animate />
             <span className="text-[14px] font-display font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-[#E7DCFF] text-[#4A3566] border border-[#B196F5] inline-flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-[#FF5FA2]" />
-              Plant Seeds (Multi-Upload)
+              Plant Seeds
             </span>
           </div>
           <h3 className="text-3xl font-brand font-bold text-[#4B2A7B]">
             {subject.title}
           </h3>
-          <p className="text-[17px] text-[#6C538C] font-body mt-1 leading-[1.6]">
-            Drop one or several lecture decks. Each will bloom into its own permanent 3-tab Material page (Learn, Quiz, Visual).
+          <p className="text-[16px] text-[#6C538C] font-body mt-1 leading-[1.5]">
+            Plant lecture slides or raw notes. Each blooms into a permanent 3-tab study deck.
           </p>
+        </div>
+
+        {/* Tab Switcher: Upload File vs Paste Notes */}
+        <div className="flex items-center gap-2 mb-4 p-1 rounded-2xl bg-[#EAD7BA]/50 border border-[#DFC29D]">
+          <button
+            type="button"
+            onClick={() => setTabMode('upload')}
+            className={`flex-1 py-2 px-3 rounded-xl font-display font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+              tabMode === 'upload'
+                ? 'bg-[#FFFDF9] text-[#4B2A7B] shadow-xs'
+                : 'text-[#855627] hover:text-[#4B2A7B]'
+            }`}
+          >
+            <UploadCloud className="w-4 h-4" />
+            <span>Upload File (PDF/PPT)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTabMode('paste')}
+            className={`flex-1 py-2 px-3 rounded-xl font-display font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+              tabMode === 'paste'
+                ? 'bg-[#FFFDF9] text-[#4B2A7B] shadow-xs'
+                : 'text-[#855627] hover:text-[#4B2A7B]'
+            }`}
+          >
+            <Edit3 className="w-4 h-4" />
+            <span>Paste Notes / Text</span>
+          </button>
         </div>
 
         {errorMessage && (
@@ -136,7 +183,7 @@ export const SeedPouchModal: React.FC<SeedPouchModalProps> = ({
           <div className="py-6 px-4 rounded-organic-md bg-[#FFFDF9] border-2 border-[#E8D4B0] space-y-4">
             <div className="flex items-center justify-center gap-3 text-[#4B2A7B] font-brand font-bold text-lg mb-2">
               <PetalFlowerMark size={32} animate className="animate-spin" />
-              <span>Cultivating {uploadQueue.length} Seed{uploadQueue.length > 1 ? 's' : ''}...</span>
+              <span>Cultivating Seed...</span>
             </div>
 
             <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
@@ -171,6 +218,42 @@ export const SeedPouchModal: React.FC<SeedPouchModalProps> = ({
               ))}
             </div>
           </div>
+        ) : tabMode === 'paste' ? (
+          /* Paste Notes Form */
+          <div className="p-4 rounded-organic-md bg-[#FFFDF9] border-2 border-[#E8D4B0] space-y-3.5">
+            <div>
+              <label className="block text-[14px] font-display font-bold text-[#4B2A7B] mb-1">
+                Note or Lecture Title
+              </label>
+              <input
+                type="text"
+                value={notesTitle}
+                onChange={(e) => setNotesTitle(e.target.value)}
+                placeholder="e.g. Session 4: Field Survey Methods & Sampling"
+                className="w-full px-3.5 py-2 rounded-xl bg-white border border-[#E8D4B0] text-[#4A3566] font-body text-[15px] focus:outline-none focus:border-[#9670F5]"
+              />
+            </div>
+            <div>
+              <label className="block text-[14px] font-display font-bold text-[#4B2A7B] mb-1">
+                Lecture Notes / Slide Content
+              </label>
+              <textarea
+                rows={5}
+                value={notesContent}
+                onChange={(e) => setNotesContent(e.target.value)}
+                placeholder="Paste your lecture notes, summaries, or classroom takeaways here. We'll automatically turn them into 3-tab study guides..."
+                className="w-full px-3.5 py-2 rounded-xl bg-white border border-[#E8D4B0] text-[#4A3566] font-body text-[14px] focus:outline-none focus:border-[#9670F5] resize-none"
+              />
+            </div>
+            <button
+              onClick={handlePasteSubmit}
+              disabled={isProcessing || !notesContent.trim()}
+              className="w-full py-3 bg-gradient-to-r from-[#FF5FA2] via-[#B196F5] to-[#7B4BB8] text-white font-brand font-bold text-[16px] rounded-xl shadow-[0_4px_0_#4B2A7B] hover:scale-[1.01] active:scale-98 transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Sparkles className="w-4 h-4 text-[#FFF0B8]" />
+              <span>Plant Notes Seed</span>
+            </button>
+          </div>
         ) : (
           /* Seed Pouch Drag & Drop Zone */
           <div
@@ -185,7 +268,7 @@ export const SeedPouchModal: React.FC<SeedPouchModalProps> = ({
               if (e.dataTransfer.files) handleFiles(e.dataTransfer.files);
             }}
             onClick={() => fileInputRef.current?.click()}
-            className={`border-3 border-dashed rounded-organic-md p-8 text-center cursor-pointer transition-all duration-300 ${
+            className={`border-3 border-dashed rounded-organic-md p-7 text-center cursor-pointer transition-all duration-300 ${
               isDragging
                 ? 'border-[#9670F5] bg-[#E7DCFF]/50 scale-[1.02]'
                 : 'border-[#855627]/40 hover:border-[#9670F5] bg-[#FFFDF9] hover:bg-[#FFFDF0]'
@@ -201,8 +284,8 @@ export const SeedPouchModal: React.FC<SeedPouchModalProps> = ({
             />
 
             {/* Seed Pouch Illustration Icon */}
-            <div className="w-20 h-20 mx-auto mb-3 relative flex items-center justify-center">
-              <svg viewBox="0 0 80 80" className="w-18 h-18 animate-bob">
+            <div className="w-16 h-16 mx-auto mb-2 relative flex items-center justify-center">
+              <svg viewBox="0 0 80 80" className="w-16 h-16 animate-bob">
                 <path
                   d="M20 30 C20 18, 60 18, 60 30 L65 65 C65 72, 15 72, 15 65 Z"
                   fill="#EAD7BA"
@@ -216,18 +299,18 @@ export const SeedPouchModal: React.FC<SeedPouchModalProps> = ({
               </svg>
             </div>
 
-            <h4 className="font-display font-bold text-[20px] text-[#4A3566] mb-1">
+            <h4 className="font-display font-bold text-[19px] text-[#4A3566] mb-1">
               Drop lecture slides or notes here
             </h4>
-            <p className="text-[16px] text-[#6C538C] font-body mb-4">
+            <p className="text-[15px] text-[#6C538C] font-body mb-3">
               Upload single or multiple decks (PDF, PPTX, DOCX, TXT, MD)
             </p>
 
-            <div className="flex items-center justify-center gap-2 text-[14px] font-display font-semibold text-[#855627]">
-              <span className="px-3 py-1 rounded-xl bg-[#FFF5E4] border border-[#E8D4B0]">.pdf</span>
-              <span className="px-3 py-1 rounded-xl bg-[#FFF5E4] border border-[#E8D4B0]">.pptx</span>
-              <span className="px-3 py-1 rounded-xl bg-[#FFF5E4] border border-[#E8D4B0]">.docx</span>
-              <span className="px-3 py-1 rounded-xl bg-[#FFF5E4] border border-[#E8D4B0]">.md</span>
+            <div className="flex items-center justify-center gap-2 text-[13px] font-display font-semibold text-[#855627]">
+              <span className="px-2.5 py-0.5 rounded-lg bg-[#FFF5E4] border border-[#E8D4B0]">.pdf</span>
+              <span className="px-2.5 py-0.5 rounded-lg bg-[#FFF5E4] border border-[#E8D4B0]">.pptx</span>
+              <span className="px-2.5 py-0.5 rounded-lg bg-[#FFF5E4] border border-[#E8D4B0]">.docx</span>
+              <span className="px-2.5 py-0.5 rounded-lg bg-[#FFF5E4] border border-[#E8D4B0]">.txt / .md</span>
             </div>
           </div>
         )}

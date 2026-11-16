@@ -1,6 +1,7 @@
 import { SubjectId, SubjectMeta } from '../types';
+import { supabase } from '../services/supabase';
 
-export const SUBJECTS: Record<SubjectId, SubjectMeta> = {
+export const DEFAULT_SUBJECTS: Record<string, SubjectMeta> = {
   pm2: {
     id: 'pm2',
     title: 'Product Management 2',
@@ -42,4 +43,73 @@ export const SUBJECTS: Record<SubjectId, SubjectMeta> = {
   },
 };
 
-export const SUBJECT_LIST = Object.values(SUBJECTS);
+const CUSTOM_SUBJECTS_KEY = 'petal_custom_subjects';
+
+export function getCustomSubjects(): Record<string, SubjectMeta> {
+  try {
+    const raw = localStorage.getItem(CUSTOM_SUBJECTS_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.warn('[Subjects] Could not read custom subjects:', e);
+  }
+  return {};
+}
+
+export function getAllSubjects(): Record<string, SubjectMeta> {
+  const custom = getCustomSubjects();
+  return { ...DEFAULT_SUBJECTS, ...custom };
+}
+
+export async function saveCustomSubject(meta: SubjectMeta): Promise<void> {
+  try {
+    const current = getCustomSubjects();
+    current[meta.id] = meta;
+    localStorage.setItem(CUSTOM_SUBJECTS_KEY, JSON.stringify(current));
+
+    // Also persist to Supabase PostgreSQL subjects table so it's globally visible
+    if (supabase) {
+      await supabase.from('subjects').upsert({
+        id: meta.id,
+        name: meta.title,
+      }, { onConflict: 'id' });
+    }
+  } catch (e) {
+    console.warn('[Subjects] Error saving custom subject:', e);
+  }
+}
+
+export function getSubjectById(id: string): SubjectMeta {
+  const all = getAllSubjects();
+  if (all[id]) return all[id];
+
+  const titleCase = id
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+  return {
+    id,
+    title: titleCase,
+    code: id.slice(0, 4).toUpperCase(),
+    characterName: 'Flora',
+    characterTitle: 'The Garden Scholar',
+    tagline: `Exploring ${titleCase} fundamentals & key principles`,
+    colorWorld: 'pm',
+    accentHex: '#8B5CF6',
+    badgeHex: '#DDD6FE',
+    glowClass: 'shadow-glow-pm',
+    description: `Comprehensive study sanctuary for ${titleCase}.`,
+  };
+}
+
+export const SUBJECTS: Record<string, SubjectMeta> = new Proxy(DEFAULT_SUBJECTS, {
+  get(target, prop: string) {
+    if (prop in target) return target[prop];
+    const custom = getCustomSubjects();
+    if (prop in custom) return custom[prop];
+    return getSubjectById(prop);
+  },
+});
+
+export const SUBJECT_LIST = Object.values(DEFAULT_SUBJECTS);

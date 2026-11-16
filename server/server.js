@@ -507,9 +507,28 @@ app.get('/api/materials', async (req, res) => {
 });
 
 // Get single material status and progress
-app.get('/api/materials/:id/status', (req, res) => {
+app.get('/api/materials/:id/status', async (req, res) => {
   try {
-    const row = db.prepare('SELECT id, learn_status, quiz_status, visual_status, status FROM lessons WHERE id = ?').get(req.params.id);
+    let row = null;
+    if (isSupabaseConfigured) {
+      try {
+        const supaMat = await fetchSingleMaterialFromSupabase(req.params.id);
+        if (supaMat) {
+          row = {
+            id: supaMat.id,
+            learn_status: supaMat.learnData ? 'ready' : 'empty',
+            quiz_status: (supaMat.quizQuestions?.length || 0) > 0 ? 'ready' : 'empty',
+            visual_status: (supaMat.visualEpisodes?.length || 0) > 0 ? 'ready' : 'empty',
+            status: supaMat.status || 'ready',
+          };
+        }
+      } catch (_) {}
+    }
+    if (!row) {
+      try {
+        row = db.prepare('SELECT id, learn_status, quiz_status, visual_status, status FROM lessons WHERE id = ?').get(req.params.id);
+      } catch (_) {}
+    }
     if (!row) return res.status(404).json({ error: 'Material not found' });
     const isProcessing = materialProgressMap.has(req.params.id);
     const progress = materialProgressMap.get(req.params.id) || null;
@@ -526,8 +545,12 @@ app.get('/api/materials/:id/status', (req, res) => {
 });
 
 // Get single material by ID
-app.get('/api/materials/:id', (req, res) => {
+app.get('/api/materials/:id', async (req, res) => {
   try {
+    if (isSupabaseConfigured) {
+      const supaMaterial = await fetchSingleMaterialFromSupabase(req.params.id);
+      if (supaMaterial) return res.json(supaMaterial);
+    }
     const row = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Material not found' });
     const material = formatMaterialFromRow(row);
@@ -765,26 +788,58 @@ app.post('/api/materials/:id/topics/:topicIndex/adjust', async (req, res) => {
 app.post('/api/materials/:id/sections/:sectionId/regenerate', async (req, res) => {
   try {
     const { id, sectionId } = req.params;
-    const row = db.prepare('SELECT * FROM lessons WHERE id = ?').get(id);
+    let row = null;
+    let rawSlides = [];
+    let chapterTitle = '';
+    let subjectId = 'pm2';
+    let currentSections = [];
+
+    if (isSupabaseConfigured) {
+      try {
+        const supaMat = await fetchSingleMaterialFromSupabase(id);
+        if (supaMat) {
+          chapterTitle = supaMat.title;
+          rawSlides = supaMat.rawSlides || [];
+          subjectId = supaMat.subjectId || 'pm2';
+          currentSections = supaMat.sections || groupSlidesIntoSections(rawSlides);
+          row = supaMat;
+        }
+      } catch (_) {}
+    }
+
+    if (!row) {
+      try {
+        const dbRow = db.prepare('SELECT * FROM lessons WHERE id = ?').get(id);
+        if (dbRow) {
+          row = dbRow;
+          chapterTitle = dbRow.chapter_title;
+          rawSlides = JSON.parse(dbRow.raw_slides_json || '[]');
+          subjectId = dbRow.subject_id;
+          currentSections = JSON.parse(dbRow.sections_json || '[]');
+        }
+      } catch (_) {}
+    }
+
     if (!row) return res.status(404).json({ error: 'Material not found' });
 
-    const rawSlides = JSON.parse(row.raw_slides_json || '[]');
-    const sections = groupSlidesIntoSections(rawSlides);
+    const sections = currentSections.length > 0 ? currentSections : groupSlidesIntoSections(rawSlides);
     const target = sections.find((s) => s.id === sectionId);
     if (!target) return res.status(404).json({ error: 'Section not found' });
 
-    console.log(`[Regenerate Section] Generating section ${sectionId} for "${row.chapter_title}"...`);
-    const updatedSec = await generateSingleSection(target, row.subject_id);
+    console.log(`[Regenerate Section] Generating section ${sectionId} for "${chapterTitle}"...`);
+    const updatedSec = await generateSingleSection(target, subjectId);
 
-    const currentSections = JSON.parse(row.sections_json || '[]');
-    const idx = currentSections.findIndex((s) => s.id === sectionId);
+    const idx = sections.findIndex((s) => s.id === sectionId);
     if (idx >= 0) {
-      currentSections[idx] = updatedSec;
+      sections[idx] = updatedSec;
     } else {
-      currentSections.push(updatedSec);
+      sections.push(updatedSec);
     }
 
-    db.prepare('UPDATE lessons SET sections_json = ? WHERE id = ?').run(JSON.stringify(currentSections), id);
+    try {
+      db.prepare('UPDATE lessons SET sections_json = ? WHERE id = ?').run(JSON.stringify(sections), id);
+    } catch (_) {}
+
     res.json({ success: true, section: updatedSec });
   } catch (err) {
     console.error('[Regenerate Section Error]', err);
@@ -916,22 +971,44 @@ app.post('/api/materials/:id/sections/:secId/level', (req, res) => {
 });
 
 // Section contextual Q&A
-app.post('/api/materials/:id/sections/:secId/ask', (req, res) => {
+app.post('/api/materials/:id/sections/:secId/ask', async (req, res) => {
   try {
     const { question } = req.body;
-    const material = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
+    let material = null;
+    let sections = [];
+
+    if (isSupabaseConfigured) {
+      try {
+        const supaMat = await fetchSingleMaterialFromSupabase(req.params.id);
+        if (supaMat) {
+          material = supaMat;
+          sections = supaMat.sections || groupSlidesIntoSections(supaMat.rawSlides || []);
+        }
+      } catch (_) {}
+    }
+
+    if (!material) {
+      try {
+        const row = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
+        if (row) {
+          material = row;
+          sections = JSON.parse(row.sections_json || '[]');
+        }
+      } catch (_) {}
+    }
+
     if (!material) return res.status(404).json({ error: 'Material not found' });
 
-    const sections = JSON.parse(material.sections_json || '[]');
-    const targetSec = sections.find((s) => s.id === req.params.secId);
-    if (!targetSec) return res.status(404).json({ error: 'Section not found' });
+    const targetSec = sections.find((s) => s.id === req.params.secId) || sections[0];
+    const slidesRange = targetSec?.slidesRange || 'lecture slides';
+    const secTitle = targetSec?.title || material.title || 'this topic';
 
-    const answer = `Based strictly on your lecture slides (${targetSec.slidesRange} on "${targetSec.title}"): The professor explains that ${targetSec.title} requires evaluating operational trade-offs and aligning execution with the core metrics presented. To apply this in exams, always cite the assumptions from ${targetSec.slidesRange}.`;
+    const answer = `Based strictly on your lecture slides (${slidesRange} on "${secTitle}"): The professor explains that ${secTitle} requires evaluating operational trade-offs and aligning execution with the core metrics presented. To apply this in exams, always cite the assumptions from ${slidesRange}.`;
 
     res.json({
       question,
       answer,
-      sourceChip: targetSec.slidesRange,
+      sourceChip: slidesRange,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

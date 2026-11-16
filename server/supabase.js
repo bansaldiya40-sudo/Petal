@@ -64,10 +64,21 @@ export async function uploadToSupabaseStorage(
  */
 export async function upsertMaterialInSupabase(material) {
   if (!supabaseServer) return null;
+  const subjectId = material.subjectId || 'pm2';
   try {
+    // Ensure subject exists in subjects table to prevent foreign key errors
+    try {
+      await supabaseServer.from('subjects').upsert({
+        id: subjectId,
+        name: typeof subjectId === 'string' ? subjectId.toUpperCase() : 'General',
+      }, { onConflict: 'id' });
+    } catch (subErr) {
+      console.warn('[Subject auto-upsert warning]', subErr.message);
+    }
+
     const { error } = await supabaseServer.from('materials').upsert({
       id: material.id,
-      subject_id: material.subjectId,
+      subject_id: subjectId,
       title: material.title,
       file_url: material.filePath || null,
       file_name: material.originalFilename || material.title,

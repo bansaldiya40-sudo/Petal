@@ -157,9 +157,23 @@ export async function fetchSingleMaterialFromSupabase(materialId: string): Promi
 export async function saveMaterialToSupabase(material: Partial<Material> & { id: string; subjectId: any; title: string }) {
   if (!supabase) return;
   const user = await getCurrentUser();
-  await supabase.from('materials').upsert({
+  const subjectId = material.subjectId || 'pm2';
+
+  // Ensure subject exists in subjects table to prevent foreign key errors
+  try {
+    const subjectName = typeof subjectId === 'string' ? subjectId.toUpperCase() : 'General';
+    await supabase.from('subjects').upsert({
+      id: subjectId,
+      name: subjectName,
+      user_id: user?.id || null,
+    }, { onConflict: 'id' });
+  } catch (subErr) {
+    console.warn('[Subject auto-upsert warning]', subErr);
+  }
+
+  const { error } = await supabase.from('materials').upsert({
     id: material.id,
-    subject_id: material.subjectId,
+    subject_id: subjectId,
     title: material.title,
     file_url: material.filePath || null,
     file_name: material.fileName || (material as any).originalFilename || material.title,
@@ -172,6 +186,10 @@ export async function saveMaterialToSupabase(material: Partial<Material> & { id:
     last_opened_at: new Date().toISOString(),
     user_id: user?.id || null,
   });
+
+  if (error) {
+    console.warn('[Supabase saveMaterial Error]', error);
+  }
 }
 
 // -------------------------------------------------------------

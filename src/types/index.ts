@@ -1,4 +1,4 @@
-export type SubjectId = 'pm2' | 'mrm' | 'microecon';
+export type SubjectId = 'pm2' | 'mrm' | 'microecon' | (string & {});
 
 export interface SubjectMeta {
   id: SubjectId;
@@ -7,7 +7,7 @@ export interface SubjectMeta {
   characterName: string;
   characterTitle: string;
   tagline: string;
-  colorWorld: 'pm' | 'mr' | 'micro';
+  colorWorld: 'pm' | 'mr' | 'micro' | 'custom' | string;
   accentHex: string;
   badgeHex: string;
   glowClass: string;

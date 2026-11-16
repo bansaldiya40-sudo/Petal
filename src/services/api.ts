@@ -9,6 +9,7 @@ import {
   ClipMeta,
   VideoSpendInfo,
   ExplainerSummary,
+  SlideContent,
 } from '../types';
 import {
   isSupabaseConfigured,
@@ -266,8 +267,8 @@ export async function uploadMaterials(files: File[], subjectId: SubjectId): Prom
   // First attempt backend upload route which extracts slides & generates AI study pages
   try {
     const formData = new FormData();
-    files.forEach((f) => formData.append('files', f));
     formData.append('subjectId', subjectId);
+    files.forEach((f) => formData.append('files', f));
 
     const res = await fetch('/api/lessons/upload', {
       method: 'POST',
@@ -344,13 +345,15 @@ export async function uploadMaterials(files: File[], subjectId: SubjectId): Prom
       // Refresh complete collection & update cache
       const supaUpdated = await fetchMaterialsFromSupabase();
       if (supaUpdated && supaUpdated.length > 0) {
-        setCachedLessons(supaUpdated as unknown as Lesson[]);
-        return supaUpdated as unknown as Lesson[];
+        const merged = [...createdLessons, ...supaUpdated.filter((s) => !createdLessons.some((c) => c.id === s.id))];
+        setCachedLessons(merged as unknown as Lesson[]);
+        return merged as unknown as Lesson[];
       }
 
       const currentCached = getCachedLessons();
-      setCachedLessons([...createdLessons, ...currentCached]);
-      return createdLessons;
+      const merged = [...createdLessons, ...currentCached.filter((c) => !createdLessons.some((n) => n.id === c.id))];
+      setCachedLessons(merged);
+      return merged;
     } catch (supaUploadErr: any) {
       console.error('Direct Supabase upload error:', supaUploadErr);
       throw new Error(supaUploadErr.message || 'Upload failed');
@@ -358,6 +361,79 @@ export async function uploadMaterials(files: File[], subjectId: SubjectId): Prom
   }
 
   throw new Error('Upload could not be processed. Please check your document.');
+}
+
+/**
+ * Uploads raw text / lecture notes directly into a subject sanctuary.
+ * Splits text into logical sections/slides and creates a permanent 3-tab study deck.
+ */
+export async function uploadTextNotes(title: string, notesText: string, subjectId: SubjectId): Promise<Lesson> {
+  const cleanTitle = title.trim() || `Lecture Notes ${new Date().toLocaleDateString()}`;
+  const materialId = `mat-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+  const now = new Date().toISOString();
+
+  // Split raw notes by headings, triple dashes, or paragraph clusters
+  const parts = notesText.split(/(?:^|\n)(?:---|\*\*\*|===|#+ Slide \d+|##+ )/i).filter((p) => p.trim().length > 0);
+  const rawSlides: SlideContent[] = parts.length > 0
+    ? parts.map((part, idx) => {
+        const lines = part.trim().split('\n').filter((l) => l.trim().length > 0);
+        return {
+          slideNumber: idx + 1,
+          title: lines[0]?.replace(/^#+\s*/, '').slice(0, 80) || `Topic ${idx + 1}`,
+          content: part.trim(),
+        };
+      })
+    : [
+        {
+          slideNumber: 1,
+          title: cleanTitle,
+          content: notesText.trim() || `Course notes for ${cleanTitle}`,
+        },
+      ];
+
+  const lessonRecord: Partial<Material> & { id: string; subjectId: SubjectId; title: string } = {
+    id: materialId,
+    subjectId,
+    title: cleanTitle,
+    fileName: `${cleanTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.txt`,
+    filePath: '',
+    fileType: 'txt',
+    fileSize: new Blob([notesText]).size,
+    totalPages: rawSlides.length,
+    rawSlides,
+    status: 'ready',
+  };
+
+  if (isSupabaseConfigured) {
+    try {
+      await saveMaterialToSupabase(lessonRecord);
+    } catch (err) {
+      console.warn('[Supabase save notes notice]', err);
+    }
+  }
+
+  const createdLesson: Lesson = {
+    id: materialId,
+    subjectId,
+    title: cleanTitle,
+    fileName: `${cleanTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.txt`,
+    fileType: 'txt',
+    fileSize: new Blob([notesText]).size,
+    uploadedAt: now,
+    totalPages: rawSlides.length,
+    status: 'new',
+    masteryScore: 0,
+    rawSlides,
+    concepts: [],
+    quizAttempts: [],
+    learnStatus: 'empty',
+    quizStatus: 'empty',
+    visualStatus: 'empty',
+  };
+
+  const cached = getCachedLessons();
+  setCachedLessons([createdLesson, ...cached.filter((c) => c.id !== materialId)]);
+  return createdLesson;
 }
 
 export interface DataStorageInfo {

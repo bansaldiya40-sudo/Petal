@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { SubjectId, Lesson } from '../../types';
+import { getCustomSubjects, saveCustomSubject } from '../../utils/subjects';
 import { ParallaxGardenLandscape } from '../illustrations/ParallaxGardenLandscape';
 import { LavenderFairyTower, MintTreehouseLibrary, GoldenHoneyMarketStall } from '../illustrations/Landmarks';
 import { ScrollOfTheDay } from '../home/ScrollOfTheDay';
-import { PetalLogo } from '../brand/PetalLogo';
-import { Sparkles, ArrowRight, BookOpen, Compass } from 'lucide-react';
+import { PetalLogo, PetalFlowerMark } from '../brand/PetalLogo';
+import { Sparkles, ArrowRight, BookOpen, Compass, Plus, X, GraduationCap } from 'lucide-react';
 
 interface HomeScreenProps {
   userName: string;
@@ -24,6 +25,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onPlantSeed,
 }) => {
   const [hoveredLandmark, setHoveredLandmark] = useState<SubjectId | null>(null);
+  const [customSubjects, setCustomSubjects] = useState(() => getCustomSubjects());
+  const [isAddSubjectOpen, setIsAddSubjectOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newCode, setNewCode] = useState('');
+  const [newMascot, setNewMascot] = useState('');
 
   // Time-aware greeting for Diya
   const getTimeGreeting = () => {
@@ -48,6 +54,35 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     };
   };
 
+  const handleCreateSubject = async () => {
+    if (!newTitle.trim()) return;
+    const cleanId = newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const code = newCode.trim().toUpperCase() || cleanId.slice(0, 4).toUpperCase();
+    const mascot = newMascot.trim() || 'Flora';
+
+    const newSubjectMeta = {
+      id: cleanId,
+      title: newTitle.trim(),
+      code,
+      characterName: mascot,
+      characterTitle: 'The Sanctuary Guide',
+      tagline: `Mastering ${newTitle.trim()} fundamentals & concepts`,
+      colorWorld: 'custom',
+      accentHex: '#9B51E0',
+      badgeHex: '#EAD7BA',
+      glowClass: 'shadow-glow-pm',
+      description: `Comprehensive study sanctuary for ${newTitle.trim()}.`,
+    };
+
+    await saveCustomSubject(newSubjectMeta);
+    setCustomSubjects(getCustomSubjects());
+    setIsAddSubjectOpen(false);
+    setNewTitle('');
+    setNewCode('');
+    setNewMascot('');
+    onSelectSubject(cleanId);
+  };
+
   const pmStats = getSubjectStats('pm2');
   const mrStats = getSubjectStats('mrm');
   const microStats = getSubjectStats('microecon');
@@ -60,6 +95,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         return bTime - aTime;
       })[0]
     : null;
+
+  const customList = Object.values(customSubjects);
 
   return (
     <ParallaxGardenLandscape>
@@ -92,8 +129,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             Pick a sanctuary to begin
           </p>
 
-          {/* Clear Primary Button: "Continue where you left off" */}
-          <div>
+          {/* Action Row: Continue + Add Subject */}
+          <div className="flex items-center gap-3 flex-wrap justify-center">
             <button
               onClick={() => {
                 if (lastMaterial) {
@@ -112,6 +149,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </span>
               <ArrowRight className="w-5 h-5 ml-1" />
             </button>
+
+            <button
+              onClick={() => setIsAddSubjectOpen(true)}
+              className="px-5 py-3.5 min-h-[54px] rounded-2xl bg-[#FFF9F2] hover:bg-[#FFF2DE] border-2 border-[#855627] text-[#4B2A7B] text-[16px] font-display font-bold inline-flex items-center gap-2 shadow-[0_4px_0_#855627] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+            >
+              <Plus className="w-5 h-5 text-[#FF5FA2]" />
+              <span>Add Subject</span>
+            </button>
           </div>
         </div>
 
@@ -119,10 +164,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         {/* 2. DESKTOP VIEW (md+): Winding Path with 3 Big Landmarks */}
         {/* ======================================================== */}
         <div className="hidden md:block relative w-full max-w-6xl mx-auto my-1 min-h-[480px] h-[500px] lg:h-[520px] shrink-0">
-          {/* ------------------------------------------------------ */}
-          {/* LANDMARK 1: Product Management 2 — Lavender Fairy Tower */}
-          {/* Upper Left on rolling hill, separated from center      */}
-          {/* ------------------------------------------------------ */}
+          {/* LANDMARK 1: Product Management 2 */}
           <div
             onClick={() => onSelectSubject('pm2')}
             onMouseEnter={() => setHoveredLandmark('pm2')}
@@ -133,8 +175,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <div className="w-64 lg:w-72 transition-transform duration-300 group-hover:scale-105">
                 <LavenderFairyTower size={260} isHovered={hoveredLandmark === 'pm2'} />
               </div>
-
-              {/* Saturated Wooden/Ribbon Signpost */}
               <div className="mt-[-24px] px-5 py-2 rounded-2xl bg-gradient-to-r from-[#9B72CF] to-[#7B4BB8] border-[2.5px] border-[#4B2A7B] shadow-[0_5px_0_#4B2A7B,0_10px_20px_rgba(75,42,123,0.2)] flex items-center gap-2.5 group-hover:scale-105 group-hover:shadow-[0_7px_0_#4B2A7B] transition-all">
                 <span className="w-3.5 h-3.5 rounded-full bg-[#FFF0B8] border border-[#4B2A7B] shrink-0" />
                 <span className="text-[20px] lg:text-[22px] font-brand font-black text-white tracking-wide whitespace-nowrap drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]">
@@ -148,10 +188,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
           </div>
 
-          {/* ------------------------------------------------------ */}
-          {/* LANDMARK 2: Market Research Methods — Mint Treehouse   */}
-          {/* Upper Right on rolling hill, separated from center     */}
-          {/* ------------------------------------------------------ */}
+          {/* LANDMARK 2: Market Research Methods */}
           <div
             onClick={() => onSelectSubject('mrm')}
             onMouseEnter={() => setHoveredLandmark('mrm')}
@@ -162,8 +199,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <div className="w-64 lg:w-72 transition-transform duration-300 group-hover:scale-105">
                 <MintTreehouseLibrary size={260} isHovered={hoveredLandmark === 'mrm'} />
               </div>
-
-              {/* Saturated Wooden/Ribbon Signpost */}
               <div className="mt-[-24px] px-5 py-2 rounded-2xl bg-gradient-to-r from-[#20C5B5] to-[#16988B] border-[2.5px] border-[#4B2A7B] shadow-[0_5px_0_#4B2A7B,0_10px_20px_rgba(75,42,123,0.2)] flex items-center gap-2.5 group-hover:scale-105 group-hover:shadow-[0_7px_0_#4B2A7B] transition-all">
                 <span className="w-3.5 h-3.5 rounded-full bg-[#FFF0B8] border border-[#4B2A7B] shrink-0" />
                 <span className="text-[20px] lg:text-[22px] font-brand font-black text-white tracking-wide whitespace-nowrap drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]">
@@ -177,10 +212,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
           </div>
 
-          {/* ------------------------------------------------------ */}
-          {/* LANDMARK 3: Microeconomics — Golden Honey Market Stall */}
-          {/* Bottom Center along the path, completely clear of both */}
-          {/* ------------------------------------------------------ */}
+          {/* LANDMARK 3: Microeconomics */}
           <div
             onClick={() => onSelectSubject('microecon')}
             onMouseEnter={() => setHoveredLandmark('microecon')}
@@ -191,8 +223,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <div className="w-64 lg:w-72 transition-transform duration-300 group-hover:scale-105">
                 <GoldenHoneyMarketStall size={260} isHovered={hoveredLandmark === 'microecon'} />
               </div>
-
-              {/* Saturated Wooden/Ribbon Signpost */}
               <div className="mt-[-24px] px-5 py-2 rounded-2xl bg-gradient-to-r from-[#FF9F43] to-[#E67E22] border-[2.5px] border-[#4B2A7B] shadow-[0_5px_0_#4B2A7B,0_10px_20px_rgba(75,42,123,0.2)] flex items-center gap-2.5 group-hover:scale-105 group-hover:shadow-[0_7px_0_#4B2A7B] transition-all">
                 <span className="w-3.5 h-3.5 rounded-full bg-[#FFF0B8] border border-[#4B2A7B] shrink-0" />
                 <span className="text-[20px] lg:text-[22px] font-brand font-black text-white tracking-wide whitespace-nowrap drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]">
@@ -206,6 +236,45 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Custom Extra Subjects Ribbon (Desktop & Mobile) */}
+        {customList.length > 0 && (
+          <div className="w-full max-w-6xl mx-auto my-4 z-20">
+            <h4 className="text-[18px] font-display font-bold text-[#4B2A7B] mb-3 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#FF5FA2]" />
+              <span>Your Custom Sanctuaries ({customList.length})</span>
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {customList.map((sub) => {
+                const stats = getSubjectStats(sub.id);
+                return (
+                  <div
+                    key={sub.id}
+                    onClick={() => onSelectSubject(sub.id)}
+                    className="p-5 rounded-organic-md bg-[#FFF9F0] border-2 border-[#855627] hover:border-[#9670F5] shadow-storybook hover:shadow-storybook-hover cursor-pointer transition-all hover:scale-[1.02] flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-[#E7DCFF] border border-[#B196F5] flex items-center justify-center text-2xl">
+                        🏛️
+                      </div>
+                      <div>
+                        <h5 className="font-brand font-bold text-[19px] text-[#4B2A7B]">
+                          {sub.title}
+                        </h5>
+                        <p className="text-xs text-[#855627] font-display">
+                          {sub.code} • {sub.characterName}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-display font-bold px-3 py-1 rounded-full bg-white text-[#4B2A7B] border border-[#855627]">
+                      {stats.lessonCount} Deck{stats.lessonCount !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* ======================================================== */}
         {/* 3. MOBILE VIEW (< md): Vertical Storybook Trail          */}
@@ -262,6 +331,90 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Modal: Add New Subject Sanctuary */}
+        {isAddSubjectOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#4A3566]/35 backdrop-blur-md animate-fadeIn">
+            <div className="w-full max-w-md rounded-organic-lg bg-[#FFF5E4] border-2 border-[#855627] shadow-[0_24px_55px_rgba(74,53,102,0.25)] p-6 relative">
+              <button
+                onClick={() => setIsAddSubjectOpen(false)}
+                className="absolute top-5 right-5 w-8 h-8 rounded-full bg-[#EAD7BA] hover:bg-[#DFC29D] text-[#855627] flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-3 mb-4">
+                <PetalFlowerMark size={30} animate />
+                <div>
+                  <h4 className="text-2xl font-brand font-bold text-[#4B2A7B]">
+                    Plant New Sanctuary
+                  </h4>
+                  <p className="text-xs text-[#6C538C] font-body">
+                    Add a new course or subject to your Petal garden.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3.5">
+                <div>
+                  <label className="block text-sm font-display font-bold text-[#4B2A7B] mb-1">
+                    Subject Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    placeholder="e.g. Corporate Finance or Operations"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#E8D4B0] text-[#4A3566] text-sm focus:outline-none focus:border-[#9670F5]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-display font-bold text-[#4B2A7B] mb-1">
+                      Course Code
+                    </label>
+                    <input
+                      type="text"
+                      value={newCode}
+                      onChange={(e) => setNewCode(e.target.value)}
+                      placeholder="e.g. CF-901"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#E8D4B0] text-[#4A3566] text-sm focus:outline-none focus:border-[#9670F5]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-display font-bold text-[#4B2A7B] mb-1">
+                      Guide / Mascot
+                    </label>
+                    <input
+                      type="text"
+                      value={newMascot}
+                      onChange={(e) => setNewMascot(e.target.value)}
+                      placeholder="e.g. Arthur the Owl"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#E8D4B0] text-[#4A3566] text-sm focus:outline-none focus:border-[#9670F5]"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end gap-2.5">
+                  <button
+                    onClick={() => setIsAddSubjectOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-[#EAD7BA] text-[#855627] font-display font-bold text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCreateSubject}
+                    disabled={!newTitle.trim()}
+                    className="btn-glossy px-5 py-2 bg-gradient-to-r from-[#FF5FA2] to-[#B196F5] text-white font-brand font-bold text-sm rounded-xl shadow-[0_3px_0_#4B2A7B] disabled:opacity-50"
+                  >
+                    Create Sanctuary
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </ParallaxGardenLandscape>
   );
