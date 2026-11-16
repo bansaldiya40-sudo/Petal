@@ -1341,23 +1341,6 @@ app.post('/api/lessons/upload', upload.array('files'), async (req, res) => {
           concepts: [],
         };
       }
-          fileType: ext,
-          fileSize: file.size,
-          totalPages: slides.length,
-          uploadedAt: now,
-          status: 'ready',
-          masteryScore: 0,
-          rawSlides: slides,
-          sections: [],
-          learnOverview: {
-            bigPicture: `Synthesizing grounded lecture overview for ${chapterTitle}...`,
-            roadmap: [],
-            quickRecap: [`Reading ${slides.length} slides from ${file.originalname}...`],
-            miniMemoryAids: [],
-          },
-          concepts: [],
-        };
-      }
 
       createdLessons.push(formattedLesson);
     }
